@@ -22,7 +22,7 @@ Product constraints this note addresses:
 
 1. **Upload → `URL.createObjectURL(file)` or `createImageBitmap(file)`** so the image never leaves the client ([MDN `createObjectURL`](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static)).
 2. **Display with MapLibre `image` source + `raster` layer**, giving four corner `[lng, lat]` coordinates (top-left → clockwise). Corners **need not form a rectangle**—MapLibre documents that they can be a general quadrilateral ([Style Spec `image`](https://maplibre.org/maplibre-style-spec/sources/#image), [`ImageSource.setCoordinates`](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/#setcoordinates)).
-3. **Interactive stretch UI:** four draggable handles (Markers or a GeoJSON point layer) that call `setCoordinates` on drag. This matches the MapLibre-native model and the pattern used by Mapbox/MapLibre demos and libraries such as [map-image-overlay](https://github.com/CatCodeDanix/map-image-overlay) and [mapbox-with-image-overlay-dragable-resizeable](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable).
+3. **Interactive stretch UI:** four draggable handles (Markers or a GeoJSON point layer) that call `setCoordinates` on drag. Primary code pattern: [map-image-overlay](https://github.com/CatCodeDanix/map-image-overlay) (see [Code references & plan](#code-references--implementation-plan) below). Minimal teaching demo: [mapbox-with-image-overlay-dragable-resizeable](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable).
 4. **Prefer feeding pixels via `updateImage({ image })`** (decoded `HTMLImageElement` / `ImageBitmap` / canvas) so you avoid relying on network fetch—official docs support this path ([`UpdateImageOptions`](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/UpdateImageOptions/), [`ImageSource.updateImage`](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/#updateimage)). A `blob:` URL in the `url` field is also a common pattern (same URL string type as any other image URL); prefer the `image` option when you already have decoded pixels.
 5. **Trace on top:** GeoJSON (or other vector) layers above the semi-transparent raster underlay (`raster-opacity`), with draw tools writing geographic coordinates ([`raster-opacity`](https://maplibre.org/maplibre-style-spec/layers/#raster-opacity)).
 6. **Persist:** store the four corners (and optional opacity) in `localStorage` / app state; store the image bytes in memory or **IndexedDB**, not `localStorage` ([Web Storage is string-only and quota-limited](https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API); [IndexedDB for larger structured data](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB)).
@@ -30,6 +30,105 @@ Product constraints this note addresses:
 **When 4 corners are not enough** (scanned cadastral plans with local bends, historical maps, rubber-sheeting): use a **multi-GCP transform** (affine / projective / polynomial / thin-plate spline) via libraries such as [`@allmaps/transform`](https://allmaps.org/docs/packages/transform/) and render with a **custom / WarpedMap layer** ([`@allmaps/maplibre`](https://allmaps.org/docs/packages/maplibre/)), or pre-warp to a canvas and feed a MapLibre `image`/`canvas` source. That is a larger product step than corner-drag stretch.
 
 **Not recommended as the primary path for this product:** server-side GDAL warping (MapWarper-style), or COG/`raster` tile pipelines—those assume georeferenced rasters or server infrastructure, not a one-shot user PNG/JPG stretch UI.
+
+---
+
+## Code references & implementation plan
+
+### Pick: two references only
+
+| Role | Project | Why this one |
+| --- | --- | --- |
+| **#1 Primary (MapLibre path)** | [CatCodeDanix/map-image-overlay](https://github.com/CatCodeDanix/map-image-overlay) MIT, npm `map-image-overlay@0.1.0-beta.0` | Only open-source package found that already does **MapLibre `image` source + corner/edge/body drag + `setCoordinates`** with a clean controller/React split. Live demos: [MapLibre](https://CatCodeDanix.github.io/map-image-overlay/demo/maplibre.html), [Mapbox](https://CatCodeDanix.github.io/map-image-overlay/demo/mapbox.html). |
+| **#2 Secondary (UX / math only)** | [publiclab/Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage/) (BSD-2 / npm MIT) | Mature corner-handle product UX (MapKnitter). Shows the same **4-corner state model** and optional **homography** math—but renders via **CSS `matrix3d`**, not MapLibre WebGL. Use as UX inspiration, not as a dependency. |
+
+**Dropped as a primary reference:** [Mr-Excel’s Mapbox demo](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable) — useful 100-line teaching of “markers → `setCoordinates`”, but map-image-overlay already contains that loop plus edges, body drag, lock/viewer mode, and opacity. No need to build from the demo when #1 exists.
+
+---
+
+### Reference #1 — `map-image-overlay` (core logic map)
+
+**Repo layout that matters:**
+
+| Path | What it does |
+| --- | --- |
+| [`src/core/ImageOverlayController.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/core/ImageOverlayController.ts) | **The engine.** Adds MapLibre/Mapbox `image` + `raster` layers; builds GeoJSON handles; owns mouse drag → new corners → `setCoordinates`. Stateless: you push coords in, listen for `change`. |
+| [`src/core/types.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/core/types.ts) | `ImageCoords` = four `[lng, lat]` tuples (TL→TR→BR→BL); `ImageOverlayPayload` for locked overlays. |
+| [`src/utils/geometry.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/utils/geometry.ts) | Mercator helpers for **rotate** / **scale** around a centroid (slider UX), not needed for free corner drag. |
+| [`src/react/useGeorefManager.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/react/useGeorefManager.ts) | React state machine: add-mode → place image → edit → save/lock; wires controller events into a reducer. |
+
+#### How the stretch loop works
+
+1. **Place an image source** (`initEditorLayers` / `syncViewer`):
+   - `map.addSource(..., { type: 'image', url, coordinates })`
+   - `map.addLayer(..., { type: 'raster', paint: { 'raster-opacity', 'raster-fade-duration': 0 } })`
+2. **Build an edit HUD as GeoJSON** (`generateGeoJson`):
+   - 1 transparent **fill** polygon (`type: 'body'`) — drag whole overlay
+   - 4 **line** edges (`type: 'edge', index`) — translate an edge (moves two corners)
+   - 4 **circle** corners (`type: 'corner', index`) — free-form stretch
+3. **On `mousedown`:** `queryRenderedFeatures` on those HUD layers; disable `dragPan`; remember `startPoint` (screen px) and `startCoords` (four corners).
+4. **On `mousemove` — the core transforms:**
+   - **Corner:** `newCorners[i] = [e.lngLat.lng, e.lngLat.lat]` (direct geographic placement).
+   - **Edge / body:** for each affected corner, `project` → add screen `deltaX/deltaY` → `unproject` (keeps motion stable under Mercator).
+   - Then: update GeoJSON HUD **and** `imageSource.setCoordinates(newCorners)`.
+5. **On `mouseup`:** re-enable pan; emit `change` with `{ corners, isDistorted }` so app state / `localStorage` can persist.
+6. **Lock / draw mode:** `syncEditor(null, …)` hides handles; `syncViewer` keeps the raster underlay so vector draw layers can sit above it.
+
+Initial placement when “adding” (`mountNewImage` in the React hook): click map → build a ~200×200 **screen-pixel** rectangle around the click via `project`/`unproject`, then stretch from there. Aspect ratio of the real file is **not** used yet in that hook (hardcoded 100 px half-size)—we should fix that in our app (place using image aspect at a sensible map width).
+
+#### What to reuse vs rewrite
+
+| Reuse as pattern | Be careful / rewrite |
+| --- | --- |
+| Controller interaction model (GeoJSON HUD + `setCoordinates`) | Package is **`0.1.0-beta.0`**, 0 GitHub stars — treat as **reference / optional spike**, not a long-term vendor lock without review |
+| `raster-fade-duration: 0` while dragging | Demo add-flow hardcodes a remote GIF URL; we need **blob / `updateImage({ image })`** for local upload |
+| Edit vs locked viewer separation | No IndexedDB; no draw tools; no touch-specific testing documented |
+| Mercator rotate/scale helpers | Prefer our Zustand (or similar) store over their reducer if we already have app state conventions |
+
+---
+
+### Reference #2 — Leaflet.DistortableImage (what differs)
+
+**Repo layout that matters:**
+
+| Path | What it does |
+| --- | --- |
+| [`src/DistortableImageOverlay.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js) | Holds `_corners[4]`; `setCorner` / `setCorners`; `scaleBy` / `rotateBy` / `dragBy` via `map.project`/`unproject`. |
+| [`_reset` + `_calculateProjectiveTransform`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js) | On every view change, computes a **CSS `matrix3d`** that maps image pixel corners → screen corners. |
+| [`src/util/MatrixUtil.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/util/MatrixUtil.js) | `general2DProjection` — classic 4-point homography (same math family as franklinta’s CSS matrix3d article). |
+| [`src/edit/handles/DistortHandle.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/edit/handles/DistortHandle.js) | Corner drag → `setCorner` → `_reset` (CSS warp). |
+
+**Critical difference for MapLibre:** DistortableImage **implements the warp in the DOM** (CSS transform on an `<img>`). MapLibre’s `image` source **already does the texture→quad mapping in WebGL**—so we do **not** port `MatrixUtil` or `_calculateProjectiveTransform` for the overlay itself. We only keep the **interaction model**: store four lat/lng corners, drag them, lock when done.
+
+Steal from DistortableImage UX (not code): select/deselect overlay, opacity toggle, lock mode while tracing, restore-to-initial corners, edge-min-width constraints.
+
+---
+
+### Recommendation for geometrie-nachzeichnen
+
+**Implement our own thin overlay editor on MapLibre**, modeled on **map-image-overlay’s controller**, do **not** adopt Leaflet.DistortableImage as a runtime dependency, and **do not** start from the Mr-Excel HTML demo except as a 5-minute mental model.
+
+#### Plan
+
+1. **Spike (½–1 day):** Open the [MapLibre live demo](https://CatCodeDanix.github.io/map-image-overlay/demo/maplibre.html); skim `ImageOverlayController.ts`. Optionally `npm i map-image-overlay@0.1.0-beta.0` in a throwaway branch to validate peer deps with our MapLibre version—or copy only the controller file (MIT) into `src/` and adapt.
+2. **MVP overlay module (own code):**
+   - Upload `File` → `createImageBitmap` / blob URL → `addSource({ type: 'image' })` or `updateImage({ image })`.
+   - Seed four corners from click + **image aspect ratio** (improve on their square default).
+   - GeoJSON corner (+ optional edge/body) handles → `setCoordinates` on drag.
+   - Opacity slider; “Lock / Fertig” hides handles.
+3. **State:** Zustand (or existing store) holds `{ corners, opacity, locked }`; persist corners (+ opacity) to `localStorage`; image bytes memory / IndexedDB.
+4. **Draw phase:** With overlay locked, enable GeoJSON draw tools above the semi-transparent raster (`raster-opacity` ~0.5–0.7). Flat map (`pitch: 0`) for tracing.
+5. **Do not build yet:** Allmaps multi-GCP rubber-sheeting, CSS overlays, server MapWarper. Revisit only if 4-corner fit fails on real Flurkarten.
+
+#### Decision summary
+
+| Option | Verdict |
+| --- | --- |
+| Depend on `map-image-overlay` long-term | **Maybe after spike**; prefer vendoring/adapting core if API/stability feels thin |
+| Copy patterns from `ImageOverlayController` into our code | **Yes — recommended default** |
+| Use Leaflet.DistortableImage | **No** (wrong renderer); UX ideas only |
+| Use Allmaps for MVP | **No** (overkill for 4-corner stretch) |
+| Mr-Excel demo | **Skip** except as minimal illustration |
 
 ---
 
@@ -174,7 +273,7 @@ Summary aligned with [`@allmaps/transform` transformation types](https://allmaps
 | **OSM iD editor** | [iD API.md](https://github.com/openstreetmap/iD/blob/master/API.md), [LearnOSM](https://learnosm.org/en/beginner/id-editor/) | Trace vectors over **TMS/WMS imagery**; opacity & **imagery offset** (shift only); custom background URL | Tile backgrounds; Mapillary etc. as photo overlays—not arbitrary image georef | Tracing UX (draw over basemap/imagery); **not** local image warp |
 | **JOSM imagery offset** | (desktop) | Nudge imagery | Offset only | Web-relevant only as “shift underlay” pattern; not stretch |
 
-**Takeaway for geometrie-nachzeichnen:** copy **MapKnitter / DistortableImage** corner-handle UX mentally, implement it with **MapLibre `image` + `setCoordinates`**, and borrow **Allmaps / MapWarper** dual-pane GCP flows only if you later need rubber-sheeting beyond four corners.
+**Takeaway for geometrie-nachzeichnen:** see [Code references & implementation plan](#code-references--implementation-plan). Short version: implement MapLibre `image` + `setCoordinates` following **map-image-overlay**; steal UX ideas from **DistortableImage**; skip Allmaps/MapWarper until 4 corners fail.
 
 ---
 
