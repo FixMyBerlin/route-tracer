@@ -2,6 +2,7 @@ import {
   boundsToOverpassBbox,
   buildOverpassInterpreterUrl,
   overpassDeUrl,
+  overpassVkUrl,
 } from '@osm-editor-kit/osm-coverage'
 import type { MapBounds } from '@osm-editor-kit/osm-data'
 import { overpassRoadLikeSelector } from '@osm-editor-kit/osm-way-chain'
@@ -29,6 +30,12 @@ export function buildHighwaysOverpassQuery(bounds: MapBounds) {
     out meta;`)
 }
 
-export function buildHighwaysOverpassUrl(bounds: MapBounds) {
-  return buildOverpassInterpreterUrl(overpassDeUrl, buildHighwaysOverpassQuery(bounds))
+export function buildHighwaysOverpassUrl(bounds: MapBounds, server: 'de' | 'vk' = 'vk') {
+  const base = server === 'vk' ? overpassVkUrl : overpassDeUrl
+  return buildOverpassInterpreterUrl(base, buildHighwaysOverpassQuery(bounds))
+}
+
+/** Primary DE interpreter, then VK fallback — helps after local 429 storms. */
+export function buildHighwaysOverpassUrls(bounds: MapBounds) {
+  return [buildHighwaysOverpassUrl(bounds, 'de'), buildHighwaysOverpassUrl(bounds, 'vk')] as const
 }

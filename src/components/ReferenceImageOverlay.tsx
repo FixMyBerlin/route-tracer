@@ -30,6 +30,8 @@ function resolveOverlayCorners(
 }
 
 export function ReferenceImageOverlay() {
+  'use no memo'
+
   const maps = useMap()
   const map = maps[MAIN_MAP_ID]?.getMap()
   const navigate = useNavigate({ from: Route.fullPath })

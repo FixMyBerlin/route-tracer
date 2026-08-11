@@ -119,7 +119,11 @@ export function parseOsmXml(xml: string): ParsedOsmData {
 }
 
 export async function downloadOsmXmlCoverage(url: string): Promise<ParsedOsmData> {
-  const response = await fetch(url)
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/osm3s+xml, application/xml, text/xml, */*',
+    },
+  })
   if (!response.ok) {
     throw new Error(`Request failed with status code ${response.status}`)
   }

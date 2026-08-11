@@ -2,7 +2,8 @@ import { serializeMapParam, type MapParam } from '@osm-editor-kit/osm-map-url'
 import { OPENFREEMAP_POSITRON_STYLE } from '@osm-editor-kit/osm-maplibre'
 import { useNavigate } from '@tanstack/react-router'
 import type { MapLibreEvent } from 'maplibre-gl'
-import { AttributionControl, Map, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
+import { useEffect } from 'react'
+import { AttributionControl, Map, useMap, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CoverageDebugOverlay } from '@/components/CoverageDebugOverlay'
 import { MapLoadingIndicator } from '@/components/MapLoadingIndicator'
@@ -24,7 +25,22 @@ type RouteTracerMapProps = {
 
 export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerMapProps) {
   const navigate = useNavigate({ from: Route.fullPath })
-  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace()
+  const { scheduleCoverageCheck } = useRouteCoveragePace()
+  const maps = useMap()
+  const mapRef = maps[MAIN_MAP_ID]
+  useEffect(() => {
+    const map = mapRef?.getMap()
+    if (!map) return
+
+    exposeMainMapForDebugging(map)
+    onZoomChange(map.getZoom())
+
+    if (map.getZoom() < viewMinZoom) return
+
+    // Always schedule a coverage check when the map instance appears — idempotent
+    // if coverage already exists; recovers after Overpass 429 / HMR.
+    scheduleCoverageCheck(map)
+  }, [mapRef, scheduleCoverageCheck, onZoomChange])
 
   return (
     <>
@@ -46,7 +62,7 @@ export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerM
           exposeMainMapForDebugging(map)
           onZoomChange(map.getZoom())
           if (map.getZoom() >= viewMinZoom) {
-            void loadCoverageNow(map)
+            scheduleCoverageCheck(map)
           }
         }}
         onMove={(event: ViewStateChangeEvent) => {
