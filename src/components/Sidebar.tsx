@@ -1,18 +1,6 @@
 import { ReferenceImagePanel } from '@/components/ReferenceImagePanel'
+import { RoutePanel } from '@/components/RoutePanel'
 import { RoutingStatusPanel } from '@/components/RoutingStatusPanel'
-import { cn } from '@/shared/cn'
-
-const sidebarPanels = [
-  {
-    title: 'Route segments',
-    description: 'OSM-snapped and manual stretches will appear here.',
-  },
-  {
-    title: 'Export',
-    description: 'GeoJSON FeatureCollection export stays in the browser.',
-  },
-] as const
-
 type SidebarProps = {
   onImageFile: (file: File) => Promise<boolean>
   zoom: number
@@ -34,19 +22,7 @@ export function Sidebar({ onImageFile, zoom }: SidebarProps) {
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         <ReferenceImagePanel onImageFile={onImageFile} />
         <RoutingStatusPanel zoom={zoom} />
-
-        {sidebarPanels.map((panel) => (
-          <section
-            key={panel.title}
-            className={cn(
-              'rounded-xl border border-slate-800 bg-slate-950/70 p-4',
-              'shadow-sm shadow-black/20',
-            )}
-          >
-            <h2 className="text-sm font-medium text-white">{panel.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{panel.description}</p>
-          </section>
-        ))}
+        <RoutePanel />
       </div>
     </aside>
   )
