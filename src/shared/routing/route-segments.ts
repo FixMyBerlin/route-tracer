@@ -133,6 +133,23 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
 }
 
+/** GeoJSON shape expected by route-snapper map layers (`snapped` property per LineString). */
+export function segmentsToRouteToolGeoJson(segments: RouteSegment[]): FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: segments.map((segment) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: segment.coordinates,
+      },
+      properties: {
+        snapped: segment.segment_kind === 'snapped',
+      },
+    })),
+  }
+}
+
 export function buildRouteExportGeoJson(segments: RouteSegment[]): FeatureCollection {
   return {
     type: 'FeatureCollection',

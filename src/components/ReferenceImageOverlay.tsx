@@ -40,6 +40,11 @@ export function ReferenceImageOverlay() {
   const aspectRatio = useReferenceImageAspectRatio()
   const controllerRef = useRef<ImageOverlayController | null>(null)
   const mountedImageUrlRef = useRef<string | null>(null)
+  const overlayOpacityRef = useRef(overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY)
+
+  useEffect(() => {
+    overlayOpacityRef.current = overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY
+  }, [overlay?.opacity])
 
   const persistOverlay = useCallback(
     (next: OverlaySearchState) => {
@@ -66,7 +71,7 @@ export function ReferenceImageOverlay() {
 
     const controller = new ImageOverlayController(map, {
       onCoordinatesChange: (corners) => {
-        debouncedPersistCorners(corners, overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY)
+        debouncedPersistCorners(corners, overlayOpacityRef.current)
       },
     })
     controllerRef.current = controller
@@ -76,7 +81,7 @@ export function ReferenceImageOverlay() {
       controllerRef.current = null
       mountedImageUrlRef.current = null
     }
-  }, [map, debouncedPersistCorners, overlay?.opacity])
+  }, [map, debouncedPersistCorners])
 
   useEffect(() => {
     const controller = controllerRef.current
@@ -103,7 +108,7 @@ export function ReferenceImageOverlay() {
     // URL persist). Re-applying URL corners here would reset in-progress drags whenever
     // this effect re-runs (e.g. map pan updates parent state). Opacity is URL-driven.
     controller.setOpacity(opacity)
-  }, [map, imageUrl, hasImage, overlay?.opacity, aspectRatio, persistOverlay])
+  }, [map, imageUrl, hasImage, overlay?.opacity, aspectRatio, persistOverlay, overlay])
 
   useEffect(() => {
     controllerRef.current?.setLocked(locked)
