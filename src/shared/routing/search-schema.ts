@@ -31,10 +31,20 @@ export type IndexSearchParams = {
   route?: string
 }
 
+function isOverlaySearchState(value: unknown): value is NonNullable<IndexSearch['overlay']> {
+  if (typeof value !== 'object' || value == null) return false
+  const overlay = value as NonNullable<IndexSearch['overlay']>
+  return (
+    Array.isArray(overlay.corners) &&
+    overlay.corners.length === 4 &&
+    typeof overlay.opacity === 'number'
+  )
+}
+
 export function serializeIndexSearch(search: IndexSearch): IndexSearchParams {
   return {
     map: serializeMapParam(search.map),
-    overlay: search.overlay ? encodeOverlaySearch(search.overlay) : undefined,
+    overlay: isOverlaySearchState(search.overlay) ? encodeOverlaySearch(search.overlay) : undefined,
     route: search.route?.length ? encodeRouteSearch(search.route) : undefined,
   }
 }

@@ -108,7 +108,16 @@ export function ReferenceImageOverlay() {
     // URL persist). Re-applying URL corners here would reset in-progress drags whenever
     // this effect re-runs (e.g. map pan updates parent state). Opacity is URL-driven.
     controller.setOpacity(opacity)
-  }, [map, imageUrl, hasImage, overlay?.opacity, aspectRatio, persistOverlay, overlay])
+  }, [
+	map,
+	imageUrl,
+	hasImage,
+	overlay?.opacity,
+	aspectRatio,
+	persistOverlay,
+	overlay,
+	overlay.corners
+])
 
   useEffect(() => {
     controllerRef.current?.setLocked(locked)

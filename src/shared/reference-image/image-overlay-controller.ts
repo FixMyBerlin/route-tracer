@@ -133,20 +133,33 @@ export class ImageOverlayController {
 
   unmount() {
     if (this.draggingCornerIndex !== null) {
-      this.handleMouseUp()
+      try {
+        this.handleMouseUp()
+      } catch {
+        // Map canvas may already be torn down.
+      }
     }
 
-    if (this.map.getLayer(REFERENCE_IMAGE_HANDLES_LAYER_ID)) {
-      this.map.removeLayer(REFERENCE_IMAGE_HANDLES_LAYER_ID)
+    if (!this.map.getStyle()?.layers) {
+      this.corners = null
+      return
     }
-    if (this.map.getLayer(REFERENCE_IMAGE_RASTER_LAYER_ID)) {
-      this.map.removeLayer(REFERENCE_IMAGE_RASTER_LAYER_ID)
-    }
-    if (this.map.getSource(REFERENCE_IMAGE_HANDLES_SOURCE_ID)) {
-      this.map.removeSource(REFERENCE_IMAGE_HANDLES_SOURCE_ID)
-    }
-    if (this.map.getSource(REFERENCE_IMAGE_SOURCE_ID)) {
-      this.map.removeSource(REFERENCE_IMAGE_SOURCE_ID)
+
+    try {
+      if (this.map.getLayer(REFERENCE_IMAGE_HANDLES_LAYER_ID)) {
+        this.map.removeLayer(REFERENCE_IMAGE_HANDLES_LAYER_ID)
+      }
+      if (this.map.getLayer(REFERENCE_IMAGE_RASTER_LAYER_ID)) {
+        this.map.removeLayer(REFERENCE_IMAGE_RASTER_LAYER_ID)
+      }
+      if (this.map.getSource(REFERENCE_IMAGE_HANDLES_SOURCE_ID)) {
+        this.map.removeSource(REFERENCE_IMAGE_HANDLES_SOURCE_ID)
+      }
+      if (this.map.getSource(REFERENCE_IMAGE_SOURCE_ID)) {
+        this.map.removeSource(REFERENCE_IMAGE_SOURCE_ID)
+      }
+    } catch {
+      // Style may be removed while layers are being torn down.
     }
 
     this.corners = null
