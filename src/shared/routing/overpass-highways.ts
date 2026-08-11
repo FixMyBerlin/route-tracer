@@ -10,17 +10,22 @@ function compactOverpassQuery(query: string) {
   return query.replace(/\s+/g, ' ').trim()
 }
 
+function waySelectorFromRoadLike(tag: string) {
+  // tag: highway~"..." or highway~"..."[service!=...][access!=private]
+  const withClosedFirstBracket = tag.includes('[') ? `[${tag.replace('[', '][')}` : `[${tag}]`
+  return withClosedFirstBracket
+}
+
 export function buildHighwaysOverpassQuery(bounds: MapBounds) {
   const bbox = boundsToOverpassBbox(bounds)
   const tag = overpassRoadLikeSelector()
+  const selector = waySelectorFromRoadLike(tag)
   return compactOverpassQuery(`
-    [out:xml];
+    [out:xml][timeout:60];
     (
-      way[${tag}](${bbox});
-      >;
-      way[${tag}](${bbox});
-      <;
+      way${selector}(${bbox});
     );
+    (._;>;);
     out meta;`)
 }
 
