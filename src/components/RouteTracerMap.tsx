@@ -11,7 +11,10 @@ import { ReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
 import { RouteSnapperHost } from '@/components/RouteSnapperHost'
 import { ViewMinZoomOverlay } from '@/components/ViewMinZoomOverlay'
 import { Route } from '@/routes/index'
-import { exposeMainMapForDebugging } from '@/shared/map/expose-main-map'
+import {
+  exposeCoverageLoaderForDebugging,
+  exposeMainMapForDebugging,
+} from '@/shared/map/expose-main-map'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
 import { viewMinZoom } from '@/shared/routing/constants'
 import { serializeIndexSearch } from '@/shared/routing/search-schema'
@@ -25,7 +28,7 @@ type RouteTracerMapProps = {
 
 export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerMapProps) {
   const navigate = useNavigate({ from: Route.fullPath })
-  const { scheduleCoverageCheck } = useRouteCoveragePace()
+  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace()
   const maps = useMap()
   const mapRef = maps[MAIN_MAP_ID]
   useEffect(() => {
@@ -33,14 +36,17 @@ export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerM
     if (!map) return
 
     exposeMainMapForDebugging(map)
-    onZoomChange(map.getZoom())
+    exposeCoverageLoaderForDebugging((m) => {
+      void loadCoverageNow(m)
+    })
 
     if (map.getZoom() < viewMinZoom) return
 
-    // Always schedule a coverage check when the map instance appears — idempotent
-    // if coverage already exists; recovers after Overpass 429 / HMR.
+    // Do not call onZoomChange here — it re-renders the parent and can retrigger this
+    // effect when pace callbacks are not referentially stable.
     scheduleCoverageCheck(map)
-  }, [mapRef, scheduleCoverageCheck, onZoomChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map instance appearance only
+  }, [mapRef])
 
   return (
     <>
