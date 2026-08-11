@@ -4,47 +4,75 @@ import { useNavigate } from '@tanstack/react-router'
 import type { MapLibreEvent } from 'maplibre-gl'
 import { AttributionControl, Map, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { CoverageDebugOverlay } from '@/components/CoverageDebugOverlay'
+import { MapLoadingIndicator } from '@/components/MapLoadingIndicator'
 import { ReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
+import { RouteSnapperHost } from '@/components/RouteSnapperHost'
+import { ViewMinZoomOverlay } from '@/components/ViewMinZoomOverlay'
 import { Route } from '@/routes/index'
 import { exposeMainMapForDebugging } from '@/shared/map/expose-main-map'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
+import { viewMinZoom } from '@/shared/routing/constants'
 import { serializeIndexSearch } from '@/shared/routing/search-schema'
+import { useRouteCoveragePace } from '@/shared/routing/use-route-coverage-pace'
 
 type RouteTracerMapProps = {
   mapViewport: MapParam
+  zoom: number
+  onZoomChange: (zoom: number) => void
 }
 
-export function RouteTracerMap({ mapViewport }: RouteTracerMapProps) {
+export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerMapProps) {
   const navigate = useNavigate({ from: Route.fullPath })
+  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace()
 
   return (
-    <Map
-      id={MAIN_MAP_ID}
-      mapStyle={OPENFREEMAP_POSITRON_STYLE}
-      initialViewState={{
-        longitude: mapViewport.lng,
-        latitude: mapViewport.lat,
-        zoom: mapViewport.zoom,
-        bearing: mapViewport.bearing,
-      }}
-      style={{ width: '100%', height: '100%' }}
-      attributionControl={false}
-      onLoad={(event: MapLibreEvent) => {
-        exposeMainMapForDebugging(event.target)
-      }}
-      onMoveEnd={(event: ViewStateChangeEvent) => {
-        const { latitude, longitude, zoom, bearing } = event.viewState
-        void navigate({
-          search: (prev) => ({
-            ...serializeIndexSearch(prev),
-            map: serializeMapParam({ zoom, lat: latitude, lng: longitude, bearing }),
-          }),
-          replace: true,
-        })
-      }}
-    >
-      <AttributionControl compact position="bottom-right" />
-      <ReferenceImageOverlay />
-    </Map>
+    <>
+      <Map
+        id={MAIN_MAP_ID}
+        mapStyle={OPENFREEMAP_POSITRON_STYLE}
+        initialViewState={{
+          longitude: mapViewport.lng,
+          latitude: mapViewport.lat,
+          zoom: mapViewport.zoom,
+          bearing: mapViewport.bearing,
+        }}
+        boxZoom={false}
+        doubleClickZoom={false}
+        style={{ width: '100%', height: '100%' }}
+        attributionControl={false}
+        onLoad={(event: MapLibreEvent) => {
+          const map = event.target
+          exposeMainMapForDebugging(map)
+          onZoomChange(map.getZoom())
+          if (map.getZoom() >= viewMinZoom) {
+            void loadCoverageNow(map)
+          }
+        }}
+        onMove={(event: ViewStateChangeEvent) => {
+          onZoomChange(event.viewState.zoom)
+          scheduleCoverageCheck(event.target)
+        }}
+        onMoveEnd={(event: ViewStateChangeEvent) => {
+          const { latitude, longitude, zoom: nextZoom, bearing } = event.viewState
+          onZoomChange(nextZoom)
+          scheduleCoverageCheck(event.target)
+          void navigate({
+            search: (prev) => ({
+              ...serializeIndexSearch(prev),
+              map: serializeMapParam({ zoom: nextZoom, lat: latitude, lng: longitude, bearing }),
+            }),
+            replace: true,
+          })
+        }}
+      >
+        <AttributionControl compact position="bottom-right" />
+        <ReferenceImageOverlay />
+        <CoverageDebugOverlay />
+        <RouteSnapperHost />
+      </Map>
+      <MapLoadingIndicator />
+      <ViewMinZoomOverlay zoom={zoom} />
+    </>
   )
 }

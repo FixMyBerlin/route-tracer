@@ -1,4 +1,5 @@
 import type { MapParam } from '@osm-editor-kit/osm-map-url'
+import { useState } from 'react'
 import { MapProvider } from 'react-map-gl/maplibre'
 import { RouteTracerMap } from '@/components/RouteTracerMap'
 import { Sidebar } from '@/components/Sidebar'
@@ -9,6 +10,7 @@ type AppShellProps = {
 }
 
 export function AppShell({ mapViewport }: AppShellProps) {
+  const [zoom, setZoom] = useState(mapViewport.zoom)
   const { handleImageFile, handleMapDrop, preventDragOver } = useReferenceImageInput()
 
   return (
@@ -19,9 +21,9 @@ export function AppShell({ mapViewport }: AppShellProps) {
           onDragOver={preventDragOver}
           onDrop={handleMapDrop}
         >
-          <RouteTracerMap mapViewport={mapViewport} />
+          <RouteTracerMap mapViewport={mapViewport} onZoomChange={setZoom} zoom={zoom} />
         </main>
-        <Sidebar onImageFile={handleImageFile} />
+        <Sidebar onImageFile={handleImageFile} zoom={zoom} />
       </div>
     </MapProvider>
   )

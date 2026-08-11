@@ -10,7 +10,7 @@ export default {
     'src/**/*.test.tsx',
     'vite.config.ts',
   ],
-  ignore: ['.agents/**', 'src/routeTree.gen.ts'],
+  ignore: ['.agents/**', 'src/routeTree.gen.ts', 'vendor/**'],
   ignoreBinaries: ['code', 'gh', 'rg'],
   rules: {
     files: 'error',
