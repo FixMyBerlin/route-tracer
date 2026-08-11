@@ -1,7 +1,7 @@
 import { useDebouncedCallback } from '@tanstack/react-pacer'
 import { useNavigate } from '@tanstack/react-router'
 import type { Map as MaplibreMap } from 'maplibre-gl'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
@@ -41,15 +41,18 @@ export function ReferenceImageOverlay() {
   const controllerRef = useRef<ImageOverlayController | null>(null)
   const mountedImageUrlRef = useRef<string | null>(null)
 
-  const persistOverlay = (next: OverlaySearchState) => {
-    void navigate({
-      search: (prev) => ({
-        ...serializeIndexSearch(prev),
-        overlay: encodeOverlaySearch(next),
-      }),
-      replace: true,
-    })
-  }
+  const persistOverlay = useCallback(
+    (next: OverlaySearchState) => {
+      void navigate({
+        search: (prev) => ({
+          ...serializeIndexSearch(prev),
+          overlay: encodeOverlaySearch(next),
+        }),
+        replace: true,
+      })
+    },
+    [navigate],
+  )
 
   const debouncedPersistCorners = useDebouncedCallback(
     (corners: ImageCoords, opacity: number) => {
@@ -96,17 +99,11 @@ export function ReferenceImageOverlay() {
       return
     }
 
-    if (overlay?.corners) {
-      controller.setCoordinates(overlay.corners)
-    }
+    // Corners are owned by the overlay controller after mount (drag handles + debounced
+    // URL persist). Re-applying URL corners here would reset in-progress drags whenever
+    // this effect re-runs (e.g. map pan updates parent state). Opacity is URL-driven.
     controller.setOpacity(opacity)
-  }, [
-	map,
-	imageUrl,
-	hasImage,
-	overlay,
-	aspectRatio
-])
+  }, [map, imageUrl, hasImage, overlay?.opacity, aspectRatio, persistOverlay])
 
   useEffect(() => {
     controllerRef.current?.setLocked(locked)
