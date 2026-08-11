@@ -25,19 +25,23 @@
   "dependencies": {
     "@osm-editor-kit/osm-map-url": "file:../../OSM/street-space-editor/packages/osm-map-url",
     "@osm-editor-kit/osm-maplibre": "file:../../OSM/street-space-editor/packages/osm-maplibre",
+    "@tanstack/react-pacer": "^0.22.1",
     "@tanstack/react-router": "^1.131.28",
     "clsx": "^2.1.1",
+    "lz-string": "^1.5.0",
     "maplibre-gl": "^5.7.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-map-gl": "^8.0.4",
     "tailwind-merge": "^3.3.1",
-    "zod": "^4.0.17"
+    "zod": "^4.0.17",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "^1.131.28",
     "@types/geojson": "^7946.0.16",
+    "@types/lz-string": "^1.5.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@typescript/typescript-darwin-arm64": "^7.0.0",

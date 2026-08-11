@@ -4,9 +4,11 @@ import { useNavigate } from '@tanstack/react-router'
 import type { MapLibreEvent } from 'maplibre-gl'
 import { AttributionControl, Map, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { ReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
 import { Route } from '@/routes/index'
 import { exposeMainMapForDebugging } from '@/shared/map/expose-main-map'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
+import { serializeIndexSearch } from '@/shared/routing/search-schema'
 
 type RouteTracerMapProps = {
   mapViewport: MapParam
@@ -34,7 +36,7 @@ export function RouteTracerMap({ mapViewport }: RouteTracerMapProps) {
         const { latitude, longitude, zoom, bearing } = event.viewState
         void navigate({
           search: (prev) => ({
-            ...prev,
+            ...serializeIndexSearch(prev),
             map: serializeMapParam({ zoom, lat: latitude, lng: longitude, bearing }),
           }),
           replace: true,
@@ -42,6 +44,7 @@ export function RouteTracerMap({ mapViewport }: RouteTracerMapProps) {
       }}
     >
       <AttributionControl compact position="bottom-right" />
+      <ReferenceImageOverlay />
     </Map>
   )
 }

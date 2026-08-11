@@ -1,5 +1,9 @@
-import { parseMapParam, type MapParam } from '@osm-editor-kit/osm-map-url'
+import { parseMapParam, serializeMapParam, type MapParam } from '@osm-editor-kit/osm-map-url'
 import { z } from 'zod'
+import {
+  decodeOverlaySearch,
+  encodeOverlaySearch,
+} from '@/shared/reference-image/overlay-search-codec'
 
 export const mapParamFallback: MapParam = { lat: 52.5, lng: 13.4, zoom: 12.1 }
 
@@ -8,6 +12,22 @@ export const indexSearchSchema = z.object({
     .string()
     .optional()
     .transform((value) => parseMapParam(value ?? '') ?? mapParamFallback),
+  overlay: z
+    .string()
+    .optional()
+    .transform((value) => decodeOverlaySearch(value)),
 })
 
 export type IndexSearch = z.infer<typeof indexSearchSchema>
+
+export type IndexSearchParams = {
+  map?: string
+  overlay?: string
+}
+
+export function serializeIndexSearch(search: IndexSearch): IndexSearchParams {
+  return {
+    map: serializeMapParam(search.map),
+    overlay: search.overlay ? encodeOverlaySearch(search.overlay) : undefined,
+  }
+}

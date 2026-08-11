@@ -1,7 +1,8 @@
-import { redirectLegacyMapHash, routerSearch } from '@osm-editor-kit/osm-map-url'
+import { redirectLegacyMapHash } from '@osm-editor-kit/osm-map-url'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { routerSearch } from '@/shared/routing/router-search'
 import { routeTree } from './routeTree.gen'
 import './components/layouts/global.css'
 
