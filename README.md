@@ -4,9 +4,21 @@ Browser app to **trace an existing route** from a temporary reference image into
 
 Export is a GeoJSON `FeatureCollection` of segment LineStrings. The reference image stays in the browser only and is never uploaded.
 
+Domain language and terminology: [`CONTEXT.md`](./CONTEXT.md).
+
 ## Development
 
 Requires [Bun](https://bun.sh) (≥ 1.3.14).
+
+This repo depends on local packages from [street-space-editor](https://github.com/FixMyBerlin/street-space-editor) via path deps. Clone that repo as a sibling of this one so these paths resolve:
+
+- `../../OSM/street-space-editor/packages/osm-map-url`
+- `../../OSM/street-space-editor/packages/osm-maplibre`
+- `../../OSM/street-space-editor/packages/osm-coverage`
+- `../../OSM/street-space-editor/packages/osm-data`
+- `../../OSM/street-space-editor/packages/osm-way-chain`
+
+If `bun run type-check` fails inside `@osm-editor-kit/osm-data`, you may need a local null-check fix in that package until upstream is patched.
 
 ```bash
 bun install
@@ -19,15 +31,42 @@ Other scripts:
 
 - `bun run check` — type-check, lint, format, tests, knip (mutating)
 - `bun run build` — production build to `dist/`
+- `bun run e2e` — Playwright smoke (starts dev server if needed)
 
-Local path deps for map URL helpers and OpenFreeMap Positron style:
+E2E setup (once per machine):
 
-- `../../OSM/street-space-editor/packages/osm-map-url`
-- `../../OSM/street-space-editor/packages/osm-maplibre`
+```bash
+bunx playwright install chromium
+```
+
+## How to use
+
+1. **Paste or drop a reference image** in the sidebar (or on the map). The image bytes stay in memory only.
+2. **Stretch the overlay** — drag corner handles until the plan lines up with the basemap. Use the opacity slider if needed.
+3. **Lock the overlay** when alignment is good so corner handles do not move while tracing.
+4. **Zoom to level 15 or higher** — OSM highway data and the routing graph load at zoom ≥ 15. Wait until the Routing panel shows the graph is ready.
+5. **Click waypoints on the map** to build snapped segments between connection points. Drag waypoints to adjust snapped stretches.
+6. **Draw-through (manual segments)** — toggle draw-through mode for stretches OSM cannot follow (e.g. a new bridge). Sketch the polyline; adjacent snapped segments reconnect at the endpoints.
+7. **Export** — download GeoJSON from the Route segments panel, or copy the page URL to share alignment and route geometry.
+
+### Shareable vs ephemeral state
+
+| Shareable (URL)              | Ephemeral (lost on refresh)                  |
+| ---------------------------- | -------------------------------------------- |
+| Map viewport (`?map=`)       | Reference image bytes                        |
+| Overlay corners and opacity  | OSM routing graph / coverage cache           |
+| Route segments and waypoints | Transient UI mode (e.g. draw-through active) |
+
+Opening a shared link restores overlay alignment and route geometry. Re-paste or re-drop the reference image to see the plan again.
+
+### Export notes
+
+- Each route segment is exported as its own GeoJSON `LineString` with `segment_kind` (`snapped` | `manual`).
+- **OSM way IDs** on snapped segments (`osm_way_ids`) are deferred — export is geometry-first until a consumer needs way-level references.
 
 ## Status
 
-Greenfield bootstrap. Domain language: [`CONTEXT.md`](./CONTEXT.md). Research notes: [`research/`](./research/).
+Greenfield bootstrap. Research notes: [`research/`](./research/).
 
 ## License
 

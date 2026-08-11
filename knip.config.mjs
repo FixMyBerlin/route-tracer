@@ -9,6 +9,8 @@ export default {
     'src/**/*.test.ts',
     'src/**/*.test.tsx',
     'vite.config.ts',
+    'playwright.config.ts',
+    'tests/**/*.ts',
   ],
   ignore: ['.agents/**', 'src/routeTree.gen.ts', 'vendor/**'],
   ignoreBinaries: ['code', 'gh', 'rg'],

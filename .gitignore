@@ -3,3 +3,5 @@ dist/
 .tsbuildinfo-app
 *.local
 .DS_Store
+playwright-report/
+test-results/
