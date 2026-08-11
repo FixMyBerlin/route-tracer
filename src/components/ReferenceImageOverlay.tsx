@@ -40,11 +40,17 @@ export function ReferenceImageOverlay() {
   const aspectRatio = useReferenceImageAspectRatio()
   const controllerRef = useRef<ImageOverlayController | null>(null)
   const mountedImageUrlRef = useRef<string | null>(null)
-  const overlayOpacityRef = useRef(overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY)
+
+  // Derive primitives during render. Do not put `overlay?.opacity` in useEffect deps —
+  // React Compiler rewrites that comparison to `overlay.opacity` and crashes when overlay
+  // is undefined. Same for `overlay.corners`.
+  const overlayOpacity = overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY
+  const overlayCorners = overlay?.corners
+  const overlayOpacityRef = useRef(overlayOpacity)
 
   useEffect(() => {
-    overlayOpacityRef.current = overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY
-  }, [overlay?.opacity])
+    overlayOpacityRef.current = overlayOpacity
+  }, [overlayOpacity])
 
   const persistOverlay = useCallback(
     (next: OverlaySearchState) => {
@@ -91,33 +97,21 @@ export function ReferenceImageOverlay() {
       return
     }
 
-    const opacity = overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY
-
     if (mountedImageUrlRef.current !== imageUrl) {
-      const corners = resolveOverlayCorners(map, overlay, aspectRatio)
-      controller.mountImage(imageUrl, corners, opacity)
+      const corners = overlayCorners ?? resolveOverlayCorners(map, undefined, aspectRatio)
+      controller.mountImage(imageUrl, corners, overlayOpacity)
       mountedImageUrlRef.current = imageUrl
 
-      if (!overlay?.corners) {
-        persistOverlay({ corners, opacity })
+      if (!overlayCorners) {
+        persistOverlay({ corners, opacity: overlayOpacity })
       }
       return
     }
 
-    // Corners are owned by the overlay controller after mount (drag handles + debounced
-    // URL persist). Re-applying URL corners here would reset in-progress drags whenever
-    // this effect re-runs (e.g. map pan updates parent state). Opacity is URL-driven.
-    controller.setOpacity(opacity)
-  }, [
-	map,
-	imageUrl,
-	hasImage,
-	overlay?.opacity,
-	aspectRatio,
-	persistOverlay,
-	overlay,
-	overlay.corners
-])
+    // Corners stay with the controller after mount (drag + debounced URL persist).
+    // Only sync opacity from URL-derived state here.
+    controller.setOpacity(overlayOpacity)
+  }, [map, imageUrl, hasImage, overlayOpacity, overlayCorners, aspectRatio, persistOverlay])
 
   useEffect(() => {
     controllerRef.current?.setLocked(locked)
