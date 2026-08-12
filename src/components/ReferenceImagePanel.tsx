@@ -61,8 +61,10 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
   const opacityPercent = Math.round((overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY) * 100)
 
   const updateOpacity = (opacity: number) => {
-    if (!overlay?.corners) return
-    updateSearch({ overlay: { corners: overlay.corners, opacity } })
+    updateSearch((prev) => {
+      if (!prev.overlay?.corners) return {}
+      return { overlay: { corners: prev.overlay.corners, opacity } }
+    })
   }
 
   const handleClear = () => {

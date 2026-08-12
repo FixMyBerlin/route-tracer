@@ -1,5 +1,5 @@
 import { MAP_CUSTOM_CONTENT_ANCHOR_LAYER_ID } from '@osm-editor-kit/osm-maplibre'
-import { useDebouncedCallback } from '@tanstack/react-pacer'
+import { useDebouncer } from '@tanstack/react-pacer'
 import type { Map as MaplibreMap, MapLayerMouseEvent } from 'maplibre-gl'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { Layer, Source, useMap } from 'react-map-gl/maplibre'
@@ -24,6 +24,17 @@ import type { ImageCoords, OverlaySearchState } from '@/shared/reference-image/t
 import { DEFAULT_OVERLAY_OPACITY } from '@/shared/reference-image/types'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 
+/**
+ * State ownership for reference-image corners:
+ *
+ * - **dirtyCorners** (React): local edits / in-progress drag. Sole interactive source of truth.
+ * - **URL `overlay.corners`**: shareable persistence + seed when dirty is null.
+ * - Display = `dirtyCorners ?? urlCorners`. Never clear dirty on pointerup (that was snapping
+ *   back to a stale URL and cancelling the drag). Pacer debounces URL writes; flush on end.
+ *
+ * Declarative `<Source coordinates={…}>` — no imperative `setCoordinates` (react-map-gl skill).
+ */
+
 function resolveOverlayCorners(
   map: MaplibreMap,
   overlay: OverlaySearchState | undefined,
@@ -33,6 +44,11 @@ function resolveOverlayCorners(
 
   const center = map.getCenter()
   return computeInitialImageCoords(map, { lng: center.lng, lat: center.lat }, aspectRatio)
+}
+
+function unprojectClientPoint(map: MaplibreMap, clientX: number, clientY: number) {
+  const rect = map.getCanvas().getBoundingClientRect()
+  return map.unproject([clientX - rect.left, clientY - rect.top])
 }
 
 type ReferenceImageMapHandlers = {
@@ -97,6 +113,11 @@ function ReferenceImageLayers({ imageUrl, corners, opacity, locked }: ReferenceI
   )
 }
 
+type WindowDragListeners = {
+  onMove: (event: PointerEvent) => void
+  onUp: (event: PointerEvent) => void
+}
+
 /**
  * Declarative reference-image layers plus `<Map>` pointer handlers for corner drag.
  * Spread `mapHandlers` onto `<Map>` and render `layers` as a child.
@@ -115,42 +136,117 @@ export function useReferenceImageOverlay(options: { editable?: boolean } = {}) {
   const aspectRatio = useReferenceImageAspectRatio()
   const overlayOpacity = overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY
   const overlayCorners = overlay?.corners
-  const [dragCorners, setDragCorners] = useState<ImageCoords | null>(null)
-  const draggingCornerIndexRef = useRef<number | null>(null)
-  const displayCorners = dragCorners ?? overlayCorners ?? null
   const cornersEditable = editable && !locked
 
-  function persistOverlay(next: OverlaySearchState) {
-    updateSearch({ overlay: next })
+  const [dirtyCorners, setDirtyCorners] = useState<ImageCoords | null>(null)
+  const dirtyCornersRef = useRef<ImageCoords | null>(null)
+  const draggingCornerIndexRef = useRef<number | null>(null)
+  const windowListenersRef = useRef<WindowDragListeners | null>(null)
+
+  // Reset local edits when the in-memory image is cleared or replaced (render-time adjust).
+  const imageSessionKey = imageUrl ?? ''
+  const [seenImageSessionKey, setSeenImageSessionKey] = useState(imageSessionKey)
+  if (imageSessionKey !== seenImageSessionKey) {
+    setSeenImageSessionKey(imageSessionKey)
+    setDirtyCorners(null)
   }
 
-  const debouncedPersistCorners = useDebouncedCallback(
+  const displayCorners = dirtyCorners ?? overlayCorners ?? null
+
+  const persistOverlayToUrl = useDebouncer(
     (corners: ImageCoords, opacity: number) => {
-      persistOverlay({ corners, opacity })
+      updateSearch({ overlay: { corners, opacity } })
     },
-    { wait: 300 },
+    {
+      wait: 300,
+      onUnmount: (debouncer) => {
+        debouncer.flush()
+      },
+    },
   )
 
+  useEffect(
+    function syncDirtyCornersRef() {
+      dirtyCornersRef.current = dirtyCorners
+      if (dirtyCorners === null) {
+        persistOverlayToUrl.cancel()
+      }
+    },
+    [dirtyCorners, persistOverlayToUrl],
+  )
+
+  const setDirtyCornersNow = useEffectEvent((corners: ImageCoords) => {
+    dirtyCornersRef.current = corners
+    setDirtyCorners(corners)
+  })
+
+  const scheduleUrlPersist = useEffectEvent((corners: ImageCoords) => {
+    persistOverlayToUrl.maybeExecute(corners, overlayOpacity)
+  })
+
+  const commitCornersToUrl = useEffectEvent(() => {
+    const corners = dirtyCornersRef.current
+    if (corners) {
+      persistOverlayToUrl.maybeExecute(corners, overlayOpacity)
+    }
+    persistOverlayToUrl.flush()
+  })
+
+  const detachWindowDragListeners = useEffectEvent(() => {
+    const listeners = windowListenersRef.current
+    if (!listeners) return
+    window.removeEventListener('pointermove', listeners.onMove)
+    window.removeEventListener('pointerup', listeners.onUp)
+    window.removeEventListener('pointercancel', listeners.onUp)
+    windowListenersRef.current = null
+  })
+
   const persistInitialOverlay = useEffectEvent((corners: ImageCoords, opacity: number) => {
-    persistOverlay({ corners, opacity })
+    updateSearch({ overlay: { corners, opacity } })
   })
 
   useEffect(
     function placeInitialOverlayCorners() {
-      if (!map || !mapLoaded || !hasImage || !imageUrl || overlayCorners) return
+      if (!map || !mapLoaded || !hasImage || !imageUrl) return
+      if (dirtyCorners || overlayCorners) return
 
       const corners = resolveOverlayCorners(map, undefined, aspectRatio)
+      // Write URL only — display picks up overlayCorners after navigate (no local/URL fight).
       persistInitialOverlay(corners, overlayOpacity)
     },
-    [map, mapLoaded, hasImage, imageUrl, overlayCorners, aspectRatio, overlayOpacity],
+    [map, mapLoaded, hasImage, imageUrl, dirtyCorners, overlayCorners, aspectRatio, overlayOpacity],
   )
 
+  useEffect(function cleanupWindowDragListenersOnUnmount() {
+    return () => {
+      detachWindowDragListeners()
+    }
+  }, [])
+
+  const moveDraggedCorner = useEffectEvent((lng: number, lat: number) => {
+    const draggingCornerIndex = draggingCornerIndexRef.current
+    const baseCorners = dirtyCornersRef.current ?? overlayCorners
+    if (draggingCornerIndex === null || !baseCorners) return
+
+    const nextCorners = baseCorners.map((corner, index) =>
+      index === draggingCornerIndex ? ([lng, lat] as const) : corner,
+    ) as ImageCoords
+
+    setDirtyCornersNow(nextCorners)
+    scheduleUrlPersist(nextCorners)
+  })
+
   const finishCornerDrag = useEffectEvent(() => {
-    if (draggingCornerIndexRef.current === null || !map) return
+    if (draggingCornerIndexRef.current === null) return
+
     draggingCornerIndexRef.current = null
-    setDragCorners(null)
-    map.dragPan.enable()
-    map.getCanvas().style.cursor = ''
+    detachWindowDragListeners()
+    commitCornersToUrl()
+
+    if (map) {
+      map.dragPan.enable()
+      map.getCanvas().style.cursor = ''
+    }
   })
 
   const onMouseDown = useEffectEvent((event: MapLayerMouseEvent) => {
@@ -162,25 +258,36 @@ export function useReferenceImageOverlay(options: { editable?: boolean } = {}) {
 
     event.preventDefault()
     draggingCornerIndexRef.current = cornerIndex
+    // Seed dirty from URL on first edit so display does not depend on a pending navigate.
+    if (!dirtyCornersRef.current && overlayCorners) {
+      setDirtyCornersNow(overlayCorners)
+    }
     map.dragPan.disable()
     map.getCanvas().style.cursor = 'grabbing'
+
+    detachWindowDragListeners()
+    const onMove = (pointerEvent: PointerEvent) => {
+      const { lng, lat } = unprojectClientPoint(map, pointerEvent.clientX, pointerEvent.clientY)
+      moveDraggedCorner(lng, lat)
+    }
+    const onUp = () => {
+      finishCornerDrag()
+    }
+    windowListenersRef.current = { onMove, onUp }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
   })
 
   const onMouseMove = useEffectEvent((event: MapLayerMouseEvent) => {
-    const draggingCornerIndex = draggingCornerIndexRef.current
-    if (!map || draggingCornerIndex === null) return
+    // Window listeners own the drag; map move only updates the grab cursor when idle.
+    if (draggingCornerIndexRef.current !== null) return
+    if (!cornersEditable || !map) return
 
-    setDragCorners((current) => {
-      const baseCorners = current ?? overlayCorners
-      if (!baseCorners) return current
-
-      const nextCorners = baseCorners.map((corner, index) =>
-        index === draggingCornerIndex ? ([event.lngLat.lng, event.lngLat.lat] as const) : corner,
-      ) as ImageCoords
-
-      debouncedPersistCorners(nextCorners, overlayOpacity)
-      return nextCorners
-    })
+    const overHandle = event.features?.some(
+      (feature) => feature.layer?.id === REFERENCE_IMAGE_HANDLES_LAYER_ID,
+    )
+    map.getCanvas().style.cursor = overHandle ? 'grab' : ''
   })
 
   const onMouseUp = useEffectEvent((event: MapLayerMouseEvent) => {
@@ -190,7 +297,9 @@ export function useReferenceImageOverlay(options: { editable?: boolean } = {}) {
 
   const onMouseLeave = useEffectEvent((event: MapLayerMouseEvent) => {
     void event
-    finishCornerDrag()
+    // Do not end the drag — the pointer often leaves the canvas while stretching a corner.
+    if (draggingCornerIndexRef.current !== null || !map) return
+    map.getCanvas().style.cursor = ''
   })
 
   const showOverlay = hasImage && imageUrl && displayCorners
@@ -207,7 +316,7 @@ export function useReferenceImageOverlay(options: { editable?: boolean } = {}) {
       : emptyReferenceImageMapHandlers
 
   const layers =
-    showOverlay && imageUrl ? (
+    showOverlay && imageUrl && displayCorners ? (
       <ReferenceImageLayers
         imageUrl={imageUrl}
         corners={displayCorners}
