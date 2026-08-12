@@ -44,6 +44,10 @@ export function useRouteSegments() {
   return useRouteStore((state) => state.segments)
 }
 
+export function useRouteToolGeoJson() {
+  return useRouteStore((state) => state.routeToolGeoJson)
+}
+
 export function useRouteSnapMode() {
   return useRouteStore((state) => state.snapMode)
 }

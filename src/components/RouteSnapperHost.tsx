@@ -1,15 +1,7 @@
-import type { FeatureCollection } from 'geojson'
-import type { GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl'
 import { useEffect, useRef } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import { init as initRouteSnapper, RouteTool } from 'route-snapper-ts'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
-import {
-  ROUTE_MANUAL_LAYER_ID,
-  ROUTE_SNAPPED_LAYER_ID,
-  ROUTE_TOOL_SOURCE_ID,
-  ROUTE_WAYPOINT_LAYER_ID,
-} from '@/shared/routing/route-layer-ids'
 import type { RouteSegment } from '@/shared/routing/route-segments'
 import {
   normalizeRouteToolGeoJson,
@@ -34,66 +26,12 @@ async function ensureRouteSnapperReady() {
   await routeSnapperInitPromise
 }
 
-const emptyFeatureCollection: FeatureCollection = {
-  type: 'FeatureCollection',
-  features: [],
-}
-
-function ensureRouteLayers(map: MaplibreMap) {
-  if (map.getSource(ROUTE_TOOL_SOURCE_ID)) return
-
-  map.addSource(ROUTE_TOOL_SOURCE_ID, {
-    type: 'geojson',
-    data: emptyFeatureCollection,
-  })
-
-  map.addLayer({
-    id: ROUTE_SNAPPED_LAYER_ID,
-    source: ROUTE_TOOL_SOURCE_ID,
-    type: 'line',
-    filter: ['all', ['==', ['geometry-type'], 'LineString'], ['==', ['get', 'snapped'], true]],
-    paint: {
-      'line-color': '#38bdf8',
-      'line-width': 5,
-    },
-  })
-
-  map.addLayer({
-    id: ROUTE_MANUAL_LAYER_ID,
-    source: ROUTE_TOOL_SOURCE_ID,
-    type: 'line',
-    filter: ['all', ['==', ['geometry-type'], 'LineString'], ['==', ['get', 'snapped'], false]],
-    paint: {
-      'line-color': '#fb923c',
-      'line-width': 5,
-      'line-dasharray': [2, 1.5],
-    },
-  })
-
-  map.addLayer({
-    id: ROUTE_WAYPOINT_LAYER_ID,
-    source: ROUTE_TOOL_SOURCE_ID,
-    type: 'circle',
-    filter: ['==', ['geometry-type'], 'Point'],
-    paint: {
-      'circle-color': '#e2e8f0',
-      'circle-radius': 6,
-      'circle-stroke-color': '#0f172a',
-      'circle-stroke-width': 2,
-    },
-  })
-}
-
-function applyRouteSegmentsToMap(
-  map: MaplibreMap,
+function applyRouteSegmentsToStore(
   segments: RouteSegment[],
-  setRouteToolGeoJson: (geojson: FeatureCollection) => void,
+  setRouteToolGeoJson: (geojson: ReturnType<typeof segmentsToRouteToolGeoJson>) => void,
   setSegments: (segments: RouteSegment[]) => void,
 ) {
-  const geojson = segmentsToRouteToolGeoJson(segments)
-  setRouteToolGeoJson(geojson)
-  const source = map.getSource(ROUTE_TOOL_SOURCE_ID) as GeoJSONSource | undefined
-  source?.setData(geojson)
+  setRouteToolGeoJson(segmentsToRouteToolGeoJson(segments))
   setSegments(segments)
 }
 
@@ -101,19 +39,17 @@ function restoreRouteOnTool(
   routeTool: RouteTool,
   segments: RouteSegment[] | undefined,
   skipPersistRef: ReturnType<typeof useSkipInitialRoutePersist>,
-  map: MaplibreMap,
-  setRouteToolGeoJson: (geojson: FeatureCollection) => void,
+  setRouteToolGeoJson: (geojson: ReturnType<typeof segmentsToRouteToolGeoJson>) => void,
   setSegments: (segments: RouteSegment[]) => void,
 ) {
   if (!segments?.length) return false
 
-  ensureRouteLayers(map)
-  applyRouteSegmentsToMap(map, segments, setRouteToolGeoJson, setSegments)
+  applyRouteSegmentsToStore(segments, setRouteToolGeoJson, setSegments)
 
   const hasManualSegments = segments.some((segment) => segment.segment_kind === 'manual')
   if (hasManualSegments) {
     // route-snapper editExistingRoute only restores waypoint endpoints, not dense freehand
-    // LineStrings. Map layers above keep the shared geometry; editing may re-snap on change.
+    // LineStrings. Declarative layers above keep the shared geometry; editing may re-snap on change.
     routeTool.startRoute()
     return true
   }
@@ -127,7 +63,8 @@ function restoreRouteOnTool(
 }
 
 /**
- * Keeps RouteTool warm once graph bytes exist, renders route layers, and syncs URL state.
+ * Keeps RouteTool warm once graph bytes exist and syncs URL state.
+ * Route geometry is rendered declaratively by {@link RouteToolLayers}.
  */
 export function RouteSnapperHost() {
   const maps = useMap()
@@ -140,6 +77,16 @@ export function RouteSnapperHost() {
   const { setRouteToolGeoJson, setSegments, setSnapMode, setUndoLength } = useRouteActions()
   const routeToolRef = useRef<RouteTool | null>(null)
   const hydratedFromUrlRef = useRef(false)
+
+  useEffect(
+    function hydrateRouteFromUrl() {
+      if (!urlSegments?.length || hydratedFromUrlRef.current) return
+
+      applyRouteSegmentsToStore(urlSegments, setRouteToolGeoJson, setSegments)
+      hydratedFromUrlRef.current = true
+    },
+    [urlSegments, setRouteToolGeoJson, setSegments],
+  )
 
   useEffect(
     function syncRouteToolGraph() {
@@ -158,10 +105,6 @@ export function RouteSnapperHost() {
           {
             set: (geojson) => {
               setRouteToolGeoJson(geojson)
-              const source = map.getMap().getSource(ROUTE_TOOL_SOURCE_ID) as
-                | GeoJSONSource
-                | undefined
-              source?.setData(geojson)
 
               const segments = normalizeRouteToolGeoJson(geojson)
               setSegments(segments)
@@ -185,7 +128,6 @@ export function RouteSnapperHost() {
             routeTool,
             segmentsToRestore,
             skipPersistRef,
-            map.getMap(),
             setRouteToolGeoJson,
             setSegments,
           )
@@ -210,48 +152,6 @@ export function RouteSnapperHost() {
       storedSegments,
       urlSegments,
     ],
-  )
-
-  useEffect(
-    function hydrateSharedRouteLayersFromUrl() {
-      if (!map || !urlSegments?.length || hydratedFromUrlRef.current) return
-
-      const mlMap = map.getMap()
-      const hydrate = () => {
-        ensureRouteLayers(mlMap)
-        applyRouteSegmentsToMap(mlMap, urlSegments, setRouteToolGeoJson, setSegments)
-        hydratedFromUrlRef.current = true
-      }
-
-      if (mlMap.isStyleLoaded()) {
-        hydrate()
-      } else {
-        void mlMap.once('load', hydrate)
-      }
-    },
-    [map, urlSegments, setRouteToolGeoJson, setSegments],
-  )
-
-  useEffect(
-    function mountRouteLayers() {
-      if (!map) return
-      const mlMap = map.getMap()
-
-      const setupLayers = () => {
-        ensureRouteLayers(mlMap)
-      }
-
-      if (mlMap.isStyleLoaded()) {
-        setupLayers()
-      } else {
-        void mlMap.once('load', setupLayers)
-      }
-
-      return () => {
-        mlMap.off('load', setupLayers)
-      }
-    },
-    [map],
   )
 
   useEffect(function teardownRouteTool() {
