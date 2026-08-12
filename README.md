@@ -59,7 +59,7 @@ Opening a shared link restores overlay alignment and route geometry. Re-paste or
 
 ## Status
 
-Greenfield bootstrap. Research notes: [`research/`](./research/).
+Greenfield bootstrap. Research notes: [`research/`](./research/). Near-future exploration: [vector tiles as routing source](./research/vector-tiles-as-routing-source.md) (vs Overpass).
 
 ## GitHub Pages
 
