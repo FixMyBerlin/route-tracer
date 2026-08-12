@@ -35,7 +35,7 @@ function ImageSourceField({ imageSource, onPersist }: ImageSourceFieldProps) {
         setDraft(nextValue)
         onPersist(nextValue)
       }}
-      className="mt-3 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none"
+      className="mt-3 w-full border-b border-slate-700 bg-transparent py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
     />
   )
 }
@@ -79,10 +79,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
 
   return (
     <section
-      className={cn(
-        'rounded-xl border border-slate-800 bg-slate-950/70 p-4',
-        'shadow-sm shadow-black/20',
-      )}
+      className="border-b border-slate-800 py-5"
       onDragOver={(event) => {
         event.preventDefault()
         setDragActive(true)
@@ -98,8 +95,8 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
 
       <div
         className={cn(
-          'mt-4 rounded-lg border border-dashed px-4 py-6 text-center transition-colors',
-          dragActive ? 'border-sky-400 bg-sky-950/40' : 'border-slate-700 bg-slate-900/60',
+          'mt-4 border border-dashed px-4 py-6 text-center transition-colors',
+          dragActive ? 'border-sky-400 bg-sky-950/30' : 'border-slate-700',
         )}
       >
         <p className="text-sm text-slate-300">Drop image here</p>
@@ -124,29 +121,31 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
         />
       </div>
 
-      <label className="mt-4 block">
-        <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">
-          Image source <span className="font-normal text-slate-500 normal-case">(optional)</span>
-        </span>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Paste the URL to where to find the image so it&apos;s easier to share this app state and
-          work on it later.
-        </p>
-        <ImageSourceField
-          key={imageSource}
-          imageSource={imageSource}
-          onPersist={persistImageSource}
-        />
-      </label>
+      <div className="mt-5 border-t border-slate-800 pt-5">
+        <label className="block">
+          <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">
+            Image source <span className="font-normal text-slate-500 normal-case">(optional)</span>
+          </span>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Paste the URL to where to find the image so it&apos;s easier to share this app state and
+            work on it later.
+          </p>
+          <ImageSourceField
+            key={imageSource}
+            imageSource={imageSource}
+            onPersist={persistImageSource}
+          />
+        </label>
+      </div>
 
       {overlay?.corners && !hasImage ? (
-        <div className="mt-3 space-y-2 rounded-md border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+        <div className="mt-5 border-l-2 border-amber-500/60 pl-3 text-sm leading-6 text-amber-100">
           <p>
             Shared overlay alignment is in the URL. Paste or drop the plan image again to restore
             the overlay.
           </p>
           {imageSource ? (
-            <p>
+            <p className="mt-2">
               Image to paste:{' '}
               <a
                 href={imageSource}
@@ -162,7 +161,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
       ) : null}
 
       {hasImage || overlay?.corners ? (
-        <div className="mt-4 space-y-4">
+        <div className="mt-5 space-y-4 border-t border-slate-800 pt-5">
           <label className="block">
             <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">
               Opacity

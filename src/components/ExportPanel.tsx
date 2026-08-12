@@ -1,4 +1,3 @@
-import { cn } from '@/shared/cn'
 import { downloadRouteGeoJson } from '@/shared/routing/route-segments'
 import { useRouteSegments } from '@/shared/routing/route-store'
 
@@ -40,12 +39,7 @@ export function ExportPanel() {
   )
 
   return (
-    <section
-      className={cn(
-        'rounded-xl border border-slate-800 bg-slate-950/70 p-4',
-        'shadow-sm shadow-black/20',
-      )}
-    >
+    <section className="py-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-white">Export</h2>
@@ -54,7 +48,7 @@ export function ExportPanel() {
           </p>
         </div>
         {segments.length > 0 ? (
-          <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
+          <span className="shrink-0 text-xs text-slate-400">
             {Math.round(totalMeters)} m · {segments.length}{' '}
             {segments.length === 1 ? 'segment' : 'segments'}
           </span>

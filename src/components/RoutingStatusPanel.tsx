@@ -34,12 +34,7 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
   }
 
   return (
-    <section
-      className={cn(
-        'rounded-xl border border-slate-800 bg-slate-950/70 p-4',
-        'shadow-sm shadow-black/20',
-      )}
-    >
+    <section className="border-b border-slate-800 py-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-white">Routing</h2>

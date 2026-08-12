@@ -53,12 +53,7 @@ export function RoutePanel() {
   )
 
   return (
-    <section
-      className={cn(
-        'rounded-xl border border-slate-800 bg-slate-950/70 p-4',
-        'shadow-sm shadow-black/20',
-      )}
-    >
+    <section className="border-b border-slate-800 py-5 last:border-b-0">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-white">Route segments</h2>
@@ -69,9 +64,7 @@ export function RoutePanel() {
           </p>
         </div>
         {segments.length > 0 && (
-          <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">
-            {Math.round(totalMeters)} m
-          </span>
+          <span className="shrink-0 text-xs text-slate-400">{Math.round(totalMeters)} m</span>
         )}
       </div>
 
@@ -109,11 +102,11 @@ export function RoutePanel() {
       </div>
 
       {segments.length > 0 ? (
-        <ol className="mt-4 space-y-2">
+        <ol className="mt-4 divide-y divide-slate-800 border-y border-slate-800">
           {segments.map((segment) => (
             <li
               key={segment.segment_index}
-              className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm"
+              className="flex items-center justify-between py-2.5 text-sm"
             >
               <span className="text-slate-200">
                 {segment.segment_index + 1}.{' '}

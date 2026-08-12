@@ -31,12 +31,12 @@ export function Sidebar({ onImageFile, zoom }: SidebarProps) {
 
   return (
     <aside className="relative z-10 flex h-full w-80 shrink-0 flex-col border-l border-slate-800 bg-slate-900/95 shadow-lg shadow-black/40">
-      <header className="border-b border-slate-800 px-4 py-5">
-        <h1 className="text-lg font-semibold text-white">{copy.title}</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">{copy.description}</p>
-      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+        <div className="border-b border-slate-800 pb-5">
+          <h1 className="text-lg font-semibold text-white">{copy.title}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{copy.description}</p>
+        </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         {step === 'image' ? <ReferenceImagePanel onImageFile={onImageFile} /> : null}
         {step === 'tracing' ? (
           <>
