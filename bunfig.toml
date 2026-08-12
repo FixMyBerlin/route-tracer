@@ -12,6 +12,7 @@ minimumReleaseAgeExcludes = [
   "@osm-editor-kit/osm-maplibre",
   "@osm-editor-kit/osm-route-snapper",
   "@osm-editor-kit/osm-way-chain",
+  "@tanstack/react-hotkeys",
 ]
 
 linker = "isolated"

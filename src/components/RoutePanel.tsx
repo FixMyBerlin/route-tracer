@@ -1,4 +1,5 @@
-import { cn } from '@/shared/cn'
+import { useHotkey } from '@tanstack/react-hotkeys'
+import { ROUTE_SEGMENT_COLORS } from '@/shared/routing/constants'
 import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
 import {
   useRouteSegments,
@@ -7,8 +8,10 @@ import {
 } from '@/shared/routing/route-store'
 import {
   clearActiveRoute,
+  setRouteDrawMode,
   toggleDrawThroughMode,
   undoRouteEdit,
+  type RouteDrawMode,
 } from '@/shared/routing/route-tool-controller'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 import { useClearRouteFromUrl } from '@/shared/routing/use-route-url-sync'
@@ -33,6 +36,25 @@ function segmentLengthMeters(coordinates: [number, number][]) {
   return length
 }
 
+const drawModes: {
+  value: RouteDrawMode
+  label: string
+  swatch: string
+  dashed?: boolean
+}[] = [
+  {
+    value: 'snapped',
+    label: 'Route snapping',
+    swatch: ROUTE_SEGMENT_COLORS.snapped,
+  },
+  {
+    value: 'freehand',
+    label: 'Freehand drawing',
+    swatch: ROUTE_SEGMENT_COLORS.freehand,
+    dashed: true,
+  },
+]
+
 export function RoutePanel() {
   const { updateSearch } = useIndexSearchNavigation()
   const segments = useRouteSegments()
@@ -40,7 +62,12 @@ export function RoutePanel() {
   const undoLength = useRouteUndoLength()
   const { graphReady } = useRoutingReadiness()
   const clearRouteFromUrl = useClearRouteFromUrl()
-  const drawThrough = !snapMode
+  const drawMode: RouteDrawMode = snapMode ? 'snapped' : 'freehand'
+
+  useHotkey('S', () => toggleDrawThroughMode(), {
+    enabled: graphReady,
+    ignoreInputs: true,
+  })
 
   const handleClearRoute = () => {
     clearActiveRoute()
@@ -58,9 +85,11 @@ export function RoutePanel() {
         <div>
           <h2 className="text-sm font-medium text-white">Route segments</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            {graphReady
-              ? 'Click waypoints on the map. Drag to adjust snapped stretches.'
-              : 'Zoom in and wait for the routing graph before drawing.'}
+            {!graphReady
+              ? 'Zoom in and wait for the routing graph before drawing.'
+              : drawMode === 'snapped'
+                ? 'Click the black dotted network to snap along OSM. Drag red handles to reshape.'
+                : 'Continues from the end of your route. Click to place orange freehand points; each click adds a straight manual segment. Press S to snap again from the last freehand point.'}
           </p>
         </div>
         {segments.length > 0 && (
@@ -68,19 +97,74 @@ export function RoutePanel() {
         )}
       </div>
 
-      <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-        <input
-          type="checkbox"
-          className="rounded border-slate-700 bg-slate-900 text-sky-500"
-          checked={drawThrough}
-          disabled={!graphReady}
-          onChange={() => toggleDrawThroughMode()}
-        />
-        Draw-through mode
-      </label>
+      <fieldset className="mt-4" disabled={!graphReady}>
+        <legend className="flex items-center gap-2 text-xs font-medium text-slate-400">
+          Draw mode
+          <kbd
+            className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-slate-200"
+            title="Press S to switch draw mode"
+          >
+            S
+          </kbd>
+        </legend>
+        <div className="mt-2 space-y-2" role="radiogroup" aria-label="Route draw mode">
+          {drawModes.map((option) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
+            >
+              <input
+                type="radio"
+                name="route-draw-mode"
+                className="border-slate-700 bg-slate-900 text-sky-500"
+                checked={drawMode === option.value}
+                disabled={!graphReady}
+                onChange={() => setRouteDrawMode(option.value)}
+              />
+              <span
+                aria-hidden
+                className={
+                  option.dashed
+                    ? 'inline-block h-0.5 w-4 shrink-0 border-t-2 border-dashed'
+                    : 'inline-block h-1 w-4 shrink-0 rounded-full'
+                }
+                style={
+                  option.dashed
+                    ? { borderColor: option.swatch }
+                    : { backgroundColor: option.swatch }
+                }
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <p className="mt-1 text-xs leading-5 text-slate-500">
-        Sketch manual stretches where OSM cannot follow the real path. Press S to toggle.
+        Mode stays active until you press <span className="font-medium text-slate-400">S</span>{' '}
+        again (or pick the other option).
       </p>
+
+      <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+        <p className="text-xs font-medium text-slate-400">Legend</p>
+        <ul className="mt-2 space-y-1.5 text-xs text-slate-300">
+          <li className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="inline-block h-1 w-4 shrink-0 rounded-full"
+              style={{ backgroundColor: ROUTE_SEGMENT_COLORS.snapped }}
+            />
+            Snapped (OSM network)
+          </li>
+          <li className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="inline-block h-0.5 w-4 shrink-0 border-t-2 border-dashed"
+              style={{ borderColor: ROUTE_SEGMENT_COLORS.freehand }}
+            />
+            Freehand (manual)
+          </li>
+        </ul>
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
@@ -110,13 +194,16 @@ export function RoutePanel() {
             >
               <span className="text-slate-200">
                 {segment.segment_index + 1}.{' '}
-                {segment.segment_kind === 'snapped' ? 'Snapped' : 'Manual'}
+                {segment.segment_kind === 'snapped' ? 'Snapped' : 'Freehand'}
               </span>
               <span
-                className={cn(
-                  'size-2.5 rounded-full',
-                  segment.segment_kind === 'snapped' ? 'bg-sky-400' : 'bg-orange-400',
-                )}
+                className="size-2.5 rounded-full"
+                style={{
+                  backgroundColor:
+                    segment.segment_kind === 'snapped'
+                      ? ROUTE_SEGMENT_COLORS.snapped
+                      : ROUTE_SEGMENT_COLORS.freehand,
+                }}
                 aria-hidden
               />
             </li>

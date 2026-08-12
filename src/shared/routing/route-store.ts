@@ -60,6 +60,10 @@ export function useRouteActions() {
   return useRouteStore((state) => state.actions)
 }
 
+export function getRouteSnapMode() {
+  return useRouteStore.getState().snapMode
+}
+
 export function clearRouteState() {
   useRouteStore.getState().actions.clearRoute()
 }
