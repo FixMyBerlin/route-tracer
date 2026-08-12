@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { downloadRouteGeoJson } from '@/shared/routing/route-segments'
 import { useRouteSegments } from '@/shared/routing/route-store'
 
@@ -23,10 +24,11 @@ function segmentLengthMeters(coordinates: [number, number][]) {
 
 export function ExportPanel() {
   const segments = useRouteSegments()
+  const [simplifyGeometry, setSimplifyGeometry] = useState(true)
 
   const handleExport = () => {
     if (segments.length === 0) return
-    downloadRouteGeoJson(segments)
+    downloadRouteGeoJson(segments, { simplify: simplifyGeometry })
   }
 
   const handleCopyLink = async () => {
@@ -55,9 +57,18 @@ export function ExportPanel() {
         ) : null}
       </div>
 
+      <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+        <input
+          type="checkbox"
+          className="rounded border-slate-700 bg-slate-900 text-sky-500"
+          checked={simplifyGeometry}
+          onChange={(event) => setSimplifyGeometry(event.target.checked)}
+        />
+        Simplify geometry (drop densified nodes)
+      </label>
       <button
         type="button"
-        className="mt-4 w-full rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+        className="mt-3 w-full rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
         disabled={segments.length === 0}
         onClick={handleExport}
       >

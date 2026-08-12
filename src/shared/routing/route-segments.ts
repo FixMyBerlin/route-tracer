@@ -1,4 +1,12 @@
-import type { Feature, FeatureCollection, GeoJsonProperties, LineString, Position } from 'geojson'
+import simplify from '@turf/simplify'
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  LineString,
+  Point,
+  Position,
+} from 'geojson'
 import type { RouteProps } from 'route-snapper-ts'
 
 export type SegmentKind = 'snapped' | 'manual'
@@ -10,6 +18,17 @@ export type RouteSegment = {
   osm_way_ids?: number[]
 }
 
+/**
+ * Douglas–Peucker tolerance in degrees (~1 m at mid-latitudes).
+ * Strips densified / colinear vertices without changing the route's look.
+ */
+const ROUTE_EXPORT_SIMPLIFY_TOLERANCE = 0.00001
+
+export type RouteExportOptions = {
+  /** When true (default), simplify each segment LineString before download. */
+  simplify?: boolean
+}
+
 const roundCoord = (value: number) => Math.round(value * 1e6) / 1e6
 
 function roundPosition(position: Position): Position {
@@ -18,18 +37,40 @@ function roundPosition(position: Position): Position {
   return [roundCoord(lng), roundCoord(lat)]
 }
 
+function positionKey(position: Position): string {
+  const [lng, lat] = roundPosition(position)
+  return `${lng},${lat}`
+}
+
 function isLineStringFeature(feature: Feature): feature is Feature<LineString, GeoJsonProperties> {
   return feature.geometry.type === 'LineString'
 }
 
-/** Extract snapped vs manual stretches from route-snapper's live GeoJSON. */
+function isPointFeature(feature: Feature): feature is Feature<Point, GeoJsonProperties> {
+  return feature.geometry.type === 'Point'
+}
+
+/**
+ * Extract snapped vs manual stretches from route-snapper's live GeoJSON.
+ * Skips speculative rubber-band LineStrings that end on a hovered cursor point.
+ */
 export function normalizeRouteToolGeoJson(collection: FeatureCollection): RouteSegment[] {
+  const hoveredEnds = new Set<string>()
+  for (const feature of collection.features) {
+    if (!isPointFeature(feature)) continue
+    if (!feature.properties?.hovered) continue
+    hoveredEnds.add(positionKey(feature.geometry.coordinates))
+  }
+
   const segments: RouteSegment[] = []
 
   for (const feature of collection.features) {
     if (!isLineStringFeature(feature)) continue
     if (typeof feature.properties?.snapped !== 'boolean') continue
     if (feature.geometry.coordinates.length < 2) continue
+
+    const end = feature.geometry.coordinates.at(-1)
+    if (end && hoveredEnds.has(positionKey(end))) continue
 
     segments.push({
       segment_index: segments.length,
@@ -150,8 +191,13 @@ export function segmentsToRouteToolGeoJson(segments: RouteSegment[]): FeatureCol
   }
 }
 
-export function buildRouteExportGeoJson(segments: RouteSegment[]): FeatureCollection {
-  return {
+export function buildRouteExportGeoJson(
+  segments: RouteSegment[],
+  options: RouteExportOptions = {},
+): FeatureCollection {
+  const shouldSimplify = options.simplify !== false
+
+  const collection: FeatureCollection = {
     type: 'FeatureCollection',
     features: segments.map((segment) => ({
       type: 'Feature',
@@ -166,10 +212,22 @@ export function buildRouteExportGeoJson(segments: RouteSegment[]): FeatureCollec
       },
     })),
   }
+
+  if (!shouldSimplify) return collection
+
+  return simplify(collection, {
+    tolerance: ROUTE_EXPORT_SIMPLIFY_TOLERANCE,
+    highQuality: true,
+    mutate: true,
+  })
 }
 
-export function downloadRouteGeoJson(segments: RouteSegment[], filename = 'route.geojson') {
-  const geojson = buildRouteExportGeoJson(segments)
+export function downloadRouteGeoJson(
+  segments: RouteSegment[],
+  options: RouteExportOptions & { filename?: string } = {},
+) {
+  const { filename = 'route.geojson', ...exportOptions } = options
+  const geojson = buildRouteExportGeoJson(segments, exportOptions)
   const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
