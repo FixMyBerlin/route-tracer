@@ -1,7 +1,7 @@
 import { type MapParam } from '@osm-editor-kit/osm-map-url'
 import { OPENFREEMAP_POSITRON_STYLE } from '@osm-editor-kit/osm-maplibre'
-import type { MapLayerMouseEvent, MapLibreEvent } from 'maplibre-gl'
-import { useEffect } from 'react'
+import type { MapLayerMouseEvent, MapLibreEvent, Map as MapLibreMap } from 'maplibre-gl'
+import { useEffect, useEffectEvent, useRef } from 'react'
 import { AttributionControl, Map, useMap, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CoverageDebugOverlay } from '@/components/CoverageDebugOverlay'
@@ -34,7 +34,9 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
   const { updateSearch } = useIndexSearchNavigation()
   const tracing = step === 'tracing'
   const imageEditable = step === 'image'
-  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace({ enabled: tracing })
+  const { scheduleCoverageCheck, loadCoverageNow, storageReady } = useRouteCoveragePace({
+    enabled: tracing,
+  })
   const { markMapLoaded } = useMapChromeActions()
   const { mapHandlers: referenceImageHandlers, layers: referenceImageLayers } =
     useReferenceImageOverlay({ editable: imageEditable })
@@ -99,7 +101,9 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
         <RouteToolLayers />
         {tracing ? <CoverageDebugOverlay /> : null}
         {tracing ? <RouteSnapperHost /> : null}
-        {tracing ? <TracingCoverageKick onReady={scheduleCoverageCheck} /> : null}
+        {tracing ? (
+          <TracingCoverageKick onSchedule={scheduleCoverageCheck} storageReady={storageReady} />
+        ) : null}
       </Map>
       <MapLoadingIndicator />
       {tracing ? <ViewMinZoomOverlay zoom={zoom} /> : null}
@@ -107,22 +111,37 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
   )
 }
 
-type TracingCoverageKickProps = {
-  onReady: (map: import('maplibre-gl').Map) => void
-}
-
 /** Schedules Overpass coverage once when entering the tracing step (map may already be loaded). */
-function TracingCoverageKick({ onReady }: TracingCoverageKickProps) {
-  const maps = useMap()
-  const mapRef = maps[MAIN_MAP_ID]
+function TracingCoverageKick({
+  onSchedule,
+  storageReady,
+}: {
+  onSchedule: (map: MapLibreMap) => void
+  storageReady: boolean
+}) {
+  const { mainMap } = useMap()
+  const kickedMapRef = useRef<MapLibreMap | null>(null)
+  const kickedReadyRef = useRef(false)
+
+  const scheduleLatest = useEffectEvent((map: MapLibreMap) => {
+    onSchedule(map)
+  })
 
   useEffect(
     function kickCoverageOnTraceEnter() {
-      const map = mapRef?.getMap()
-      if (!map) return
-      onReady(map)
+      if (!storageReady) {
+        kickedReadyRef.current = false
+        return
+      }
+      if (!mainMap) return
+      const map = mainMap.getMap()
+      // react-map-gl MapRef identity can churn; kick once per map after storage is ready.
+      if (kickedMapRef.current === map && kickedReadyRef.current) return
+      kickedMapRef.current = map
+      kickedReadyRef.current = true
+      scheduleLatest(map)
     },
-    [mapRef, onReady],
+    [mainMap, storageReady],
   )
 
   return null

@@ -1,14 +1,25 @@
+import { formatCoverageAgeHour } from '@osm-editor-kit/osm-coverage'
+import { useQueryClient } from '@tanstack/react-query'
+import { useMap } from 'react-map-gl/maplibre'
+import { Route } from '@/routes/index'
 import { cn } from '@/shared/cn'
-import { viewMinZoom } from '@/shared/routing/constants'
-import { useIsOsmCoverageFetching } from '@/shared/routing/osm-coverage-query'
-import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
+import { NETWORK_HIGHLIGHT_COLORS, viewMinZoom } from '@/shared/routing/constants'
+import { scheduleCoverageFromMap } from '@/shared/routing/map-helpers'
 import {
-  NETWORK_HIGHLIGHT_COLORS,
-  type NetworkHighlightMode,
-  useNetworkHighlight,
-  useRoutingUiActions,
-  useShowCoverageDebug,
-} from '@/shared/routing/routing-ui-store'
+  useOsmCoveragePrefsActions,
+  useOsmPreferFresh,
+} from '@/shared/routing/osm-coverage-prefs-store'
+import {
+  clearPersistedOsmCoverage,
+  emptyOsmCoverageData,
+  osmCoverageSessionKey,
+  useIsOsmCoverageFetching,
+  useOsmCoverageFetch,
+  useOsmCoverageQuery,
+} from '@/shared/routing/osm-coverage-query'
+import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
+import type { NetworkHighlightMode } from '@/shared/routing/search-schema'
+import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 
 type RoutingStatusPanelProps = {
   zoom: number
@@ -18,26 +29,35 @@ const highlightOptions: {
   value: NetworkHighlightMode
   label: string
   swatch?: string
+  dashed?: boolean
 }[] = [
-  { value: 'invisible', label: 'Routes invisible' },
+  { value: 'invisible', label: 'Network hidden' },
   {
     value: 'overpass',
-    label: 'Highlight Overpass ways',
+    label: 'Overpass ways (under streets)',
     swatch: NETWORK_HIGHLIGHT_COLORS.overpass,
   },
   {
     value: 'routing',
-    label: 'Highlight routing network',
+    label: 'Routing graph (black dotted)',
     swatch: NETWORK_HIGHLIGHT_COLORS.routing,
+    dashed: true,
   },
 ]
 
 export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
-  const showCoverageDebug = useShowCoverageDebug()
-  const networkHighlight = useNetworkHighlight()
-  const { setShowCoverageDebug, setNetworkHighlight } = useRoutingUiActions()
+  const coverageDebug = Route.useSearch({ select: (search) => search.coverageDebug })
+  const network = Route.useSearch({ select: (search) => search.network })
+  const { updateSearch } = useIndexSearchNavigation()
   const isFetching = useIsOsmCoverageFetching()
   const { wayCount, edgeCount, graphReady, graphBuilding, graphError } = useRoutingReadiness()
+  const savedAt = useOsmCoverageQuery({ select: (data) => data.savedAt })
+  const ageLabel = formatCoverageAgeHour(savedAt.data ?? null)
+  const preferFresh = useOsmPreferFresh()
+  const { setPreferFresh } = useOsmCoveragePrefsActions()
+  const queryClient = useQueryClient()
+  const { mainMap } = useMap()
+  const { loadOsmData, isFetching: coverageBusy } = useOsmCoverageFetch()
 
   let status = 'Pan the map to load OSM highways.'
   let tone: 'muted' | 'loading' | 'ready' | 'error' = 'muted'
@@ -58,6 +78,27 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
     tone = 'loading'
   }
 
+  async function reloadViewport(options?: { force?: boolean; clearPersistedOnForce?: boolean }) {
+    const map = mainMap?.getMap()
+    if (!map) return
+    const args = scheduleCoverageFromMap(map)
+    await loadOsmData(args.bounds, args.zoom, {
+      mapSizePx: args.mapSizePx,
+      force: options?.force,
+      clearPersistedOnForce: options?.clearPersistedOnForce,
+    })
+  }
+
+  async function onPreferFreshChange(next: boolean) {
+    setPreferFresh(next)
+    if (!next) return
+    await clearPersistedOsmCoverage({})
+    queryClient.setQueryData(osmCoverageSessionKey({}), emptyOsmCoverageData())
+    if (mainMap && mainMap.getMap().getZoom() >= viewMinZoom) {
+      await reloadViewport({ force: true, clearPersistedOnForce: true })
+    }
+  }
+
   return (
     <section className="border-b border-slate-800 py-5">
       <div className="flex items-start justify-between gap-3">
@@ -74,6 +115,13 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
           >
             {status}
           </p>
+          {ageLabel ? (
+            <p className="mt-1 text-xs text-slate-500">
+              {preferFresh ? 'Fetching fresh OSM (cache off)' : `OSM data from ~${ageLabel}`}
+            </p>
+          ) : preferFresh ? (
+            <p className="mt-1 text-xs text-slate-500">Fetching fresh OSM (cache off)</p>
+          ) : null}
         </div>
         {(tone === 'loading' || graphBuilding) && (
           <span
@@ -101,8 +149,8 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
           <dt className="flex items-center gap-2">
             <span
               aria-hidden
-              className="inline-block h-0.5 w-3 rounded-full"
-              style={{ backgroundColor: NETWORK_HIGHLIGHT_COLORS.routing }}
+              className="inline-block h-0.5 w-3 border-t-2 border-dotted"
+              style={{ borderColor: NETWORK_HIGHLIGHT_COLORS.routing }}
             />
             Routing graph
           </dt>
@@ -111,6 +159,30 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
           </dd>
         </div>
       </dl>
+
+      <div className="mt-4 flex flex-col gap-2">
+        <button
+          type="button"
+          className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-xs text-slate-200 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={zoom < viewMinZoom || coverageBusy || !mainMap}
+          onClick={() => {
+            void reloadViewport({ force: true, clearPersistedOnForce: true })
+          }}
+        >
+          Reload OSM for this view
+        </button>
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            className="rounded border-slate-700 bg-slate-900 text-sky-500"
+            checked={preferFresh}
+            onChange={(event) => {
+              void onPreferFreshChange(event.target.checked)
+            }}
+          />
+          Always fetch fresh OSM
+        </label>
+      </div>
 
       <fieldset className="mt-4">
         <legend className="text-xs font-medium text-slate-400">Network style</legend>
@@ -124,14 +196,22 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
                 type="radio"
                 name="network-highlight"
                 className="border-slate-700 bg-slate-900 text-sky-500"
-                checked={networkHighlight === option.value}
-                onChange={() => setNetworkHighlight(option.value)}
+                checked={network === option.value}
+                onChange={() => updateSearch({ network: option.value })}
               />
               {option.swatch ? (
                 <span
                   aria-hidden
-                  className="inline-block h-1 w-4 shrink-0 rounded-full"
-                  style={{ backgroundColor: option.swatch }}
+                  className={
+                    option.dashed
+                      ? 'inline-block h-0.5 w-4 shrink-0 border-t-2 border-dotted'
+                      : 'inline-block h-1 w-4 shrink-0 rounded-full'
+                  }
+                  style={
+                    option.dashed
+                      ? { borderColor: option.swatch }
+                      : { backgroundColor: option.swatch }
+                  }
                 />
               ) : (
                 <span
@@ -149,8 +229,8 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
         <input
           type="checkbox"
           className="rounded border-slate-700 bg-slate-900 text-sky-500"
-          checked={showCoverageDebug}
-          onChange={(event) => setShowCoverageDebug(event.target.checked)}
+          checked={coverageDebug}
+          onChange={(event) => updateSearch({ coverageDebug: event.target.checked })}
         />
         Show coverage outline (debug)
       </label>

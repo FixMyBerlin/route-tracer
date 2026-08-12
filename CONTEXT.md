@@ -17,15 +17,23 @@ Secondary UI for image upload, overlay controls, route status, and export — no
 _Avoid_: Right panel, image panel
 
 **Shareable state**:
-Client state encoded in the URL so a link restores a session's work: route segments, waypoints, and optionally image overlay position (corners, opacity). Long payloads are compressed or encoded to keep URLs practical.
+Client state encoded in the URL so a link restores a session's work: route segments, waypoints, optionally image overlay position (corners, opacity), optional `imageSource` (where to find the plan again), and optional `imageId` (same-browser IndexedDB pointer to the reference image bytes). Long payloads are compressed or encoded to keep URLs practical.
 _Avoid_: URL params, query string, deep link
 
+**Local image restore**:
+Reference image bytes stay in the browser (IndexedDB), keyed by URL `imageId`. Restores after refresh on the same origin for up to ~3 months; not available on another device or after prune/clear. Cross-device sharing still requires re-pasting (or using `imageSource`).
+_Avoid_: localStorage image, uploaded image, server image
+
+**Local OSM coverage cache**:
+Merged Overpass graph + coverage polygon for the current session key, stored in IndexedDB on the same origin. Restored into TanStack Query on boot so pans do not re-hit Overpass for already covered areas. Age is shown rounded to the hour; the user can reload the current view or prefer fresh network fetches (skips restore/save). Pruned after ~14 days. Not in the URL and not shared across devices.
+_Avoid_: Overpass tile cache, localStorage OSM, bbox store
+
 **Ephemeral state**:
-Client state that is not in the URL and is lost on refresh: the reference image bytes, the OSM routing graph (built from merged viewport coverage), and transient UI mode (e.g. draw-through active). OSM coverage accumulates in the browser session (TanStack Query memory), not localStorage.
+Client state that is not in the URL and is lost on refresh: the rebuilt route-snapper WASM graph (derived from restored OSM coverage), and transient UI mode (e.g. draw-through active).
 _Avoid_: Local state, temp state, session storage
 
 **OSM coverage**:
-The geographic area for which OSM data has been fetched and merged into a session routing graph. Grows incrementally as the user pans and zooms — only missing viewport strips are fetched. Managed by `@osm-editor-kit/osm-coverage` from street-space-editor.
+The geographic area for which OSM data has been fetched and merged into a session routing graph. Grows incrementally as the user pans and zooms — only missing viewport strips are fetched. Managed by `@osm-editor-kit/osm-coverage` (npm alpha); durable across reloads via IndexedDB.
 _Avoid_: Loaded area, bbox, extract, tile
 
 **Route**:
@@ -74,4 +82,4 @@ _Avoid_: Download, output file
 
 **Dev:** That becomes a manual segment in the export — its own LineString with `segment_kind: manual`. The stretches before and after stay snapped, each with the OSM way IDs they follow.
 
-**Expert:** Exactly. Three features in order. I can share the link — route and overlay alignment come back, I just re-paste the plan image. The GeoJSON export is what we keep for downstream use.
+**Expert:** Exactly. Three features in order. I can share the link — route and overlay alignment come back; on this browser the plan image restores from IndexedDB when `imageId` is still valid, otherwise I re-paste it (the optional source URL helps). OSM highway coverage for areas I already loaded also comes back from IndexedDB so I am not re-querying Overpass for the same viewport. The GeoJSON export is what we keep for downstream use.
