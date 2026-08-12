@@ -31,6 +31,7 @@ Other scripts:
 
 - `bun run check` — type-check, lint, format, tests, knip (mutating)
 - `bun run build` — production build to `dist/`
+- `bun run preview:pages` — build and preview the GitHub Pages bundle at `/route-tracer/`
 - `bun run e2e` — Playwright smoke (starts dev server if needed)
 
 E2E setup (once per machine):
@@ -67,6 +68,21 @@ Opening a shared link restores overlay alignment and route geometry. Re-paste or
 ## Status
 
 Greenfield bootstrap. Research notes: [`research/`](./research/).
+
+## GitHub Pages
+
+Published at **https://fixmyberlin.github.io/route-tracer/** when [GitHub Pages](https://github.com/FixMyBerlin/route-tracer/settings/pages) is set to **GitHub Actions** as the source.
+
+The production build uses `base: /route-tracer/` (see `src/shared/site-base.ts`). After each build, `index.html` is copied to `404.html` so direct links and refreshes work as a SPA. `public/.nojekyll` disables Jekyll processing.
+
+Test the Pages bundle locally:
+
+```bash
+bun run preview:pages
+# open http://127.0.0.1:4173/route-tracer/
+```
+
+For Overpass API origin allowlisting, use `https://fixmyberlin.github.io` (no path).
 
 ## License
 
