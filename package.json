@@ -24,6 +24,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@maptiler/geocoding-control": "^3.0.0",
     "@osm-editor-kit/osm-coverage": "file:../../OSM/street-space-editor/packages/osm-coverage",
     "@osm-editor-kit/osm-data": "file:../../OSM/street-space-editor/packages/osm-data",
     "@osm-editor-kit/osm-map-url": "file:../../OSM/street-space-editor/packages/osm-map-url",
@@ -35,6 +36,7 @@
     "clsx": "^2.1.1",
     "lz-string": "^1.5.0",
     "maplibre-gl": "^5.7.1",
+    "motion": "^13.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-map-gl": "^8.0.4",
@@ -83,6 +85,9 @@
     "not ie 11",
     "not op_mini all"
   ],
+  "patchedDependencies": {
+    "@maptiler/geocoding-control@3.0.0": "patches/@maptiler%2Fgeocoding-control@3.0.0.patch"
+  },
   "trustedDependencies": [
     "eslint-plugin-compat"
   ]

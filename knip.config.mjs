@@ -11,6 +11,7 @@ export default {
     'vite.config.ts',
     'playwright.config.ts',
     'tests/**/*.ts',
+    'src/shared/site-base.ts',
   ],
   ignore: ['.agents/**', 'src/routeTree.gen.ts', 'vendor/**'],
   ignoreBinaries: ['code', 'gh', 'rg'],
