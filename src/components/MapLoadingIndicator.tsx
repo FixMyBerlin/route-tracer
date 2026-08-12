@@ -7,7 +7,7 @@ export function MapLoadingIndicator() {
 
   return (
     <div
-      className="pointer-events-none absolute top-4 left-4 z-20 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-2 text-sm text-slate-200 shadow-lg ring-1 ring-slate-700"
+      className="pointer-events-none absolute top-14 left-4 z-20 flex items-center gap-2 rounded-full bg-slate-950/90 px-3 py-2 text-sm text-slate-200 shadow-lg ring-1 ring-slate-700"
       aria-live="polite"
       aria-label="Loading OSM"
     >
