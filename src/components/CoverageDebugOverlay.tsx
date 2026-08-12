@@ -1,9 +1,9 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
+import { Route } from '@/routes/index'
 import { useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
-import { useShowCoverageDebug } from '@/shared/routing/routing-ui-store'
 
 export function CoverageDebugOverlay() {
-  const enabled = useShowCoverageDebug()
+  const enabled = Route.useSearch({ select: (search) => search.coverageDebug })
   const coverage = useOsmCoverageQuery({
     select: (data) => data.coverage,
   })

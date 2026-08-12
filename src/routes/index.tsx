@@ -1,9 +1,17 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, stripSearchParams } from '@tanstack/react-router'
 import { AppShell } from '@/components/AppShell'
-import { indexSearchSchema } from '@/shared/routing/search-schema'
+import { indexSearchDefaults, indexSearchSchema } from '@/shared/routing/search-schema'
 
 export const Route = createFileRoute('/')({
   validateSearch: indexSearchSchema,
+  search: {
+    middlewares: [
+      stripSearchParams({
+        network: indexSearchDefaults.network,
+        coverageDebug: indexSearchDefaults.coverageDebug,
+      }),
+    ],
+  },
   component: IndexPage,
 })
 

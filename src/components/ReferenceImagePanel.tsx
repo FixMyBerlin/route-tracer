@@ -2,10 +2,12 @@ import { useDebouncedCallback } from '@tanstack/react-pacer'
 import { useRef, useState } from 'react'
 import { Route } from '@/routes/index'
 import { cn } from '@/shared/cn'
+import { deleteReferenceImage } from '@/shared/reference-image/reference-image-idb'
 import {
   useHasReferenceImage,
   useReferenceImageActions,
   useReferenceImageLocked,
+  useReferenceImageRestoreStatus,
 } from '@/shared/reference-image/reference-image-store'
 import { DEFAULT_OVERLAY_OPACITY } from '@/shared/reference-image/types'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
@@ -17,6 +19,37 @@ type ReferenceImagePanelProps = {
 type ImageSourceFieldProps = {
   imageSource: string
   onPersist: (value: string) => void
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function ImageSourceHint({ imageSource }: { imageSource: string }) {
+  if (!imageSource) return null
+
+  return (
+    <p className="mt-2">
+      Image to paste:{' '}
+      {isHttpUrl(imageSource) ? (
+        <a
+          href={imageSource}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all text-sky-300 underline underline-offset-2 hover:text-sky-200"
+        >
+          {imageSource}
+        </a>
+      ) : (
+        <span className="break-all text-slate-200">{imageSource}</span>
+      )}
+    </p>
+  )
 }
 
 function ImageSourceField({ imageSource, onPersist }: ImageSourceFieldProps) {
@@ -44,7 +77,9 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
   const { updateSearch } = useIndexSearchNavigation()
   const overlay = Route.useSearch({ select: (search) => search.overlay })
   const imageSource = Route.useSearch({ select: (search) => search.imageSource ?? '' })
+  const imageId = Route.useSearch({ select: (search) => search.imageId })
   const hasImage = useHasReferenceImage()
+  const restoreStatus = useReferenceImageRestoreStatus()
   const locked = useReferenceImageLocked()
   const { clearImage, setLocked } = useReferenceImageActions()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -68,8 +103,10 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
   }
 
   const handleClear = () => {
+    const idToDelete = imageId
     clearImage()
-    updateSearch({ overlay: undefined })
+    updateSearch({ overlay: undefined, imageId: undefined })
+    if (idToDelete) void deleteReferenceImage(idToDelete)
   }
 
   const handleDrop = async (event: React.DragEvent<HTMLElement>) => {
@@ -78,6 +115,10 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
     const file = event.dataTransfer.files[0]
     if (file) await onImageFile(file)
   }
+
+  const showRecoveryFailed = Boolean(imageId) && !hasImage && restoreStatus === 'missing'
+  const showSharedOverlayHint =
+    Boolean(overlay?.corners) && !hasImage && !showRecoveryFailed && restoreStatus !== 'pending'
 
   return (
     <section
@@ -91,8 +132,9 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
     >
       <h2 className="text-sm font-medium text-white">Reference image</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
-        Drop a plan image here, paste anywhere on the page, or choose a file. The image stays in
-        memory only; corners, opacity, and an optional source URL are shareable via the URL.
+        Drop a plan image here, paste anywhere on the page, or choose a file. The image is kept in
+        this browser for up to 3 months so a refresh can restore it; corners, opacity, and an
+        optional source URL are shareable via the URL.
       </p>
 
       <div
@@ -140,29 +182,27 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
         </label>
       </div>
 
-      {overlay?.corners && !hasImage ? (
+      {showRecoveryFailed ? (
+        <div className="mt-5 border-l-2 border-amber-500/60 pl-3 text-sm leading-6 text-amber-100">
+          <p>
+            Could not recover the reference image from this browser. Paste or drop the plan image
+            again.
+          </p>
+          <ImageSourceHint imageSource={imageSource} />
+        </div>
+      ) : null}
+
+      {showSharedOverlayHint ? (
         <div className="mt-5 border-l-2 border-amber-500/60 pl-3 text-sm leading-6 text-amber-100">
           <p>
             Shared overlay alignment is in the URL. Paste or drop the plan image again to restore
             the overlay.
           </p>
-          {imageSource ? (
-            <p className="mt-2">
-              Image to paste:{' '}
-              <a
-                href={imageSource}
-                target="_blank"
-                rel="noreferrer"
-                className="break-all text-sky-300 underline underline-offset-2 hover:text-sky-200"
-              >
-                {imageSource}
-              </a>
-            </p>
-          ) : null}
+          <ImageSourceHint imageSource={imageSource} />
         </div>
       ) : null}
 
-      {hasImage || overlay?.corners ? (
+      {hasImage || overlay?.corners || showRecoveryFailed ? (
         <div className="mt-5 space-y-4 border-t border-slate-800 pt-5">
           <label className="block">
             <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">

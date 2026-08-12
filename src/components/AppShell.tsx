@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { WorkflowNav } from '@/components/WorkflowNav'
 import { Route } from '@/routes/index'
 import { useReferenceImageInput } from '@/shared/reference-image/use-reference-image-input'
+import { useRestoreReferenceImage } from '@/shared/reference-image/use-restore-reference-image'
 
 type AppShellProps = {
   mapViewport: MapParam
@@ -14,6 +15,7 @@ type AppShellProps = {
 export function AppShell({ mapViewport }: AppShellProps) {
   const step = Route.useSearch({ select: (search) => search.step })
   const [zoom, setZoom] = useState(mapViewport.zoom)
+  useRestoreReferenceImage()
   const { handleImageFile, handleMapDrop, preventDragOver } = useReferenceImageInput({
     enabled: step === 'image',
   })

@@ -14,7 +14,8 @@ const useMapChromeStore = create<MapChromeState>((set) => ({
   osmDataBusy: false,
   actions: {
     markMapLoaded: () => set((state) => (state.mapLoaded ? state : { mapLoaded: true })),
-    setOsmDataBusy: (busy) => set({ osmDataBusy: busy }),
+    setOsmDataBusy: (busy) =>
+      set((state) => (state.osmDataBusy === busy ? state : { osmDataBusy: busy })),
   },
 }))
 
