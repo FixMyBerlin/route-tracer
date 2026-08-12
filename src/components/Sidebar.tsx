@@ -3,7 +3,7 @@ import { ReferenceImagePanel } from '@/components/ReferenceImagePanel'
 import { RoutePanel } from '@/components/RoutePanel'
 import { RoutingStatusPanel } from '@/components/RoutingStatusPanel'
 import { Route } from '@/routes/index'
-import { workflowStepLabels, type WorkflowStep } from '@/shared/routing/workflow-steps'
+import type { WorkflowStep } from '@/shared/routing/workflow-steps'
 
 type SidebarProps = {
   onImageFile: (file: File) => Promise<boolean>
@@ -30,12 +30,9 @@ export function Sidebar({ onImageFile, zoom }: SidebarProps) {
   const copy = stepCopy[step]
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-slate-800 bg-slate-900/95">
+    <aside className="relative z-10 flex h-full w-80 shrink-0 flex-col border-l border-slate-800 bg-slate-900/95 shadow-lg shadow-black/40">
       <header className="border-b border-slate-800 px-4 py-5">
-        <p className="text-xs font-semibold tracking-[0.2em] text-sky-400 uppercase">
-          {workflowStepLabels[step]}
-        </p>
-        <h1 className="mt-2 text-lg font-semibold text-white">{copy.title}</h1>
+        <h1 className="text-lg font-semibold text-white">{copy.title}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">{copy.description}</p>
       </header>
 
