@@ -37,10 +37,10 @@ Product constraints this note addresses:
 
 ### Pick: two references only
 
-| Role | Project | Why this one |
-| --- | --- | --- |
-| **#1 Primary (MapLibre path)** | [CatCodeDanix/map-image-overlay](https://github.com/CatCodeDanix/map-image-overlay) MIT, npm `map-image-overlay@0.1.0-beta.0` | Only open-source package found that already does **MapLibre `image` source + corner/edge/body drag + `setCoordinates`** with a clean controller/React split. Live demos: [MapLibre](https://CatCodeDanix.github.io/map-image-overlay/demo/maplibre.html), [Mapbox](https://CatCodeDanix.github.io/map-image-overlay/demo/mapbox.html). |
-| **#2 Secondary (UX / math only)** | [publiclab/Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage/) (BSD-2 / npm MIT) | Mature corner-handle product UX (MapKnitter). Shows the same **4-corner state model** and optional **homography** math—but renders via **CSS `matrix3d`**, not MapLibre WebGL. Use as UX inspiration, not as a dependency. |
+| Role                              | Project                                                                                                                       | Why this one                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#1 Primary (MapLibre path)**    | [CatCodeDanix/map-image-overlay](https://github.com/CatCodeDanix/map-image-overlay) MIT, npm `map-image-overlay@0.1.0-beta.0` | Only open-source package found that already does **MapLibre `image` source + corner/edge/body drag + `setCoordinates`** with a clean controller/React split. Live demos: [MapLibre](https://CatCodeDanix.github.io/map-image-overlay/demo/maplibre.html), [Mapbox](https://CatCodeDanix.github.io/map-image-overlay/demo/mapbox.html). |
+| **#2 Secondary (UX / math only)** | [publiclab/Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage/) (BSD-2 / npm MIT)                | Mature corner-handle product UX (MapKnitter). Shows the same **4-corner state model** and optional **homography** math—but renders via **CSS `matrix3d`**, not MapLibre WebGL. Use as UX inspiration, not as a dependency.                                                                                                             |
 
 **Dropped as a primary reference:** [Mr-Excel’s Mapbox demo](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable) — useful 100-line teaching of “markers → `setCoordinates`”, but map-image-overlay already contains that loop plus edges, body drag, lock/viewer mode, and opacity. No need to build from the demo when #1 exists.
 
@@ -50,12 +50,12 @@ Product constraints this note addresses:
 
 **Repo layout that matters:**
 
-| Path | What it does |
-| --- | --- |
+| Path                                                                                                                                   | What it does                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`src/core/ImageOverlayController.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/core/ImageOverlayController.ts) | **The engine.** Adds MapLibre/Mapbox `image` + `raster` layers; builds GeoJSON handles; owns mouse drag → new corners → `setCoordinates`. Stateless: you push coords in, listen for `change`. |
-| [`src/core/types.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/core/types.ts) | `ImageCoords` = four `[lng, lat]` tuples (TL→TR→BR→BL); `ImageOverlayPayload` for locked overlays. |
-| [`src/utils/geometry.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/utils/geometry.ts) | Mercator helpers for **rotate** / **scale** around a centroid (slider UX), not needed for free corner drag. |
-| [`src/react/useGeorefManager.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/react/useGeorefManager.ts) | React state machine: add-mode → place image → edit → save/lock; wires controller events into a reducer. |
+| [`src/core/types.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/core/types.ts)                                   | `ImageCoords` = four `[lng, lat]` tuples (TL→TR→BR→BL); `ImageOverlayPayload` for locked overlays.                                                                                            |
+| [`src/utils/geometry.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/utils/geometry.ts)                           | Mercator helpers for **rotate** / **scale** around a centroid (slider UX), not needed for free corner drag.                                                                                   |
+| [`src/react/useGeorefManager.ts`](https://github.com/CatCodeDanix/map-image-overlay/blob/main/src/react/useGeorefManager.ts)           | React state machine: add-mode → place image → edit → save/lock; wires controller events into a reducer.                                                                                       |
 
 #### How the stretch loop works
 
@@ -78,12 +78,12 @@ Initial placement when “adding” (`mountNewImage` in the React hook): click m
 
 #### What to reuse vs rewrite
 
-| Reuse as pattern | Be careful / rewrite |
-| --- | --- |
+| Reuse as pattern                                              | Be careful / rewrite                                                                                                                |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Controller interaction model (GeoJSON HUD + `setCoordinates`) | Package is **`0.1.0-beta.0`**, 0 GitHub stars — treat as **reference / optional spike**, not a long-term vendor lock without review |
-| `raster-fade-duration: 0` while dragging | Demo add-flow hardcodes a remote GIF URL; we need **blob / `updateImage({ image })`** for local upload |
-| Edit vs locked viewer separation | No IndexedDB; no draw tools; no touch-specific testing documented |
-| Mercator rotate/scale helpers | Prefer our Zustand (or similar) store over their reducer if we already have app state conventions |
+| `raster-fade-duration: 0` while dragging                      | Demo add-flow hardcodes a remote GIF URL; we need **blob / `updateImage({ image })`** for local upload                              |
+| Edit vs locked viewer separation                              | No IndexedDB; no draw tools; no touch-specific testing documented                                                                   |
+| Mercator rotate/scale helpers                                 | Prefer our Zustand (or similar) store over their reducer if we already have app state conventions                                   |
 
 ---
 
@@ -91,12 +91,12 @@ Initial placement when “adding” (`mountNewImage` in the React hook): click m
 
 **Repo layout that matters:**
 
-| Path | What it does |
-| --- | --- |
-| [`src/DistortableImageOverlay.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js) | Holds `_corners[4]`; `setCorner` / `setCorners`; `scaleBy` / `rotateBy` / `dragBy` via `map.project`/`unproject`. |
-| [`_reset` + `_calculateProjectiveTransform`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js) | On every view change, computes a **CSS `matrix3d`** that maps image pixel corners → screen corners. |
-| [`src/util/MatrixUtil.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/util/MatrixUtil.js) | `general2DProjection` — classic 4-point homography (same math family as franklinta’s CSS matrix3d article). |
-| [`src/edit/handles/DistortHandle.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/edit/handles/DistortHandle.js) | Corner drag → `setCorner` → `_reset` (CSS warp). |
+| Path                                                                                                                                         | What it does                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`src/DistortableImageOverlay.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js)           | Holds `_corners[4]`; `setCorner` / `setCorners`; `scaleBy` / `rotateBy` / `dragBy` via `map.project`/`unproject`. |
+| [`_reset` + `_calculateProjectiveTransform`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/DistortableImageOverlay.js) | On every view change, computes a **CSS `matrix3d`** that maps image pixel corners → screen corners.               |
+| [`src/util/MatrixUtil.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/util/MatrixUtil.js)                           | `general2DProjection` — classic 4-point homography (same math family as franklinta’s CSS matrix3d article).       |
+| [`src/edit/handles/DistortHandle.js`](https://github.com/publiclab/Leaflet.DistortableImage/blob/main/src/edit/handles/DistortHandle.js)     | Corner drag → `setCorner` → `_reset` (CSS warp).                                                                  |
 
 **Critical difference for MapLibre:** DistortableImage **implements the warp in the DOM** (CSS transform on an `<img>`). MapLibre’s `image` source **already does the texture→quad mapping in WebGL**—so we do **not** port `MatrixUtil` or `_calculateProjectiveTransform` for the overlay itself. We only keep the **interaction model**: store four lat/lng corners, drag them, lock when done.
 
@@ -122,13 +122,13 @@ Steal from DistortableImage UX (not code): select/deselect overlay, opacity togg
 
 #### Decision summary
 
-| Option | Verdict |
-| --- | --- |
-| Depend on `map-image-overlay` long-term | **Maybe after spike**; prefer vendoring/adapting core if API/stability feels thin |
-| Copy patterns from `ImageOverlayController` into our code | **Yes — recommended default** |
-| Use Leaflet.DistortableImage | **No** (wrong renderer); UX ideas only |
-| Use Allmaps for MVP | **No** (overkill for 4-corner stretch) |
-| Mr-Excel demo | **Skip** except as minimal illustration |
+| Option                                                    | Verdict                                                                           |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Depend on `map-image-overlay` long-term                   | **Maybe after spike**; prefer vendoring/adapting core if API/stability feels thin |
+| Copy patterns from `ImageOverlayController` into our code | **Yes — recommended default**                                                     |
+| Use Leaflet.DistortableImage                              | **No** (wrong renderer); UX ideas only                                            |
+| Use Allmaps for MVP                                       | **No** (overkill for 4-corner stretch)                                            |
+| Mr-Excel demo                                             | **Skip** except as minimal illustration                                           |
 
 ---
 
@@ -140,9 +140,9 @@ Style Spec: an `image` source has a `url` and `coordinates`—four `[longitude, 
 
 Runtime API (`ImageSource`):
 
-| Method | Role |
-| --- | --- |
-| `setCoordinates(coordinates)` | Move / stretch the overlay; corners need not be a rectangle ([docs](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/#setcoordinates)) |
+| Method                                        | Role                                                                                                                                                                  |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setCoordinates(coordinates)`                 | Move / stretch the overlay; corners need not be a rectangle ([docs](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/#setcoordinates))                |
 | `updateImage({ url \| image, coordinates? })` | Swap image and optionally coordinates; use `image` for already-decoded pixels ([docs](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/#updateimage)) |
 
 Official example pattern (radar animation): add `type: 'image'` source, `type: 'raster'` layer, then `updateImage` / coordinate updates; set `'raster-fade-duration': 0` to avoid flash when updating ([Animate a series of images](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/)).
@@ -159,7 +159,7 @@ map.addSource('plan', {
     [lngBR, latBR],
     [lngBL, latBL],
   ],
-});
+})
 
 map.addLayer({
   id: 'plan-raster',
@@ -169,24 +169,24 @@ map.addLayer({
     'raster-opacity': 0.6,
     'raster-fade-duration': 0,
   },
-});
+})
 
 // Stretch UI: on corner drag
-map.getSource('plan').setCoordinates(nextFourCorners);
+map.getSource('plan').setCoordinates(nextFourCorners)
 ```
 
 **Note:** MapLibre’s example titled [“Add a stretchable image to the map”](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-stretchable-image-to-the-map/) is about **sprite / icon nine-slice stretch** (`map.addImage` + `stretchX` / `stretchY`), **not** geographic image overlays. Do not confuse it with `image` sources.
 
 ### Image source vs `raster` / `raster-dem` / custom layers
 
-| Mechanism | What it is | Fit for user-upload stretch |
-| --- | --- | --- |
-| **`image` source** | Single image texture placed by 4 geographic corners; rendered via a **`raster` layer** | **Primary fit** for plan/photo overlays |
-| **`raster` source** | XYZ/WMS **tile** pyramid ([Style Spec](https://maplibre.org/maplibre-style-spec/sources/#raster)) | Needs tileserver / COG protocol; not a simple upload |
-| **`raster-dem`** | Terrain RGB DEM tiles | Unrelated to plan overlays |
-| **`video` source** | Same 4-corner model as image ([Style Spec](https://maplibre.org/maplibre-style-spec/sources/#video)) | Same stretch model; video instead of still |
-| **`canvas` source** | HTML canvas contents + 4 corners ([`CanvasSource`](https://maplibre.org/maplibre-gl-js/docs/API/classes/CanvasSource/), [spec](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/CanvasSourceSpecification/)) | Useful if you **pre-warp** pixels in 2D canvas, then place the result |
-| **`CustomLayerInterface`** | Draw directly into the map WebGL context ([docs](https://maplibre.org/maplibre-gl-js/docs/API/interfaces/CustomLayerInterface/)) | Used by Allmaps MapLibre plugin for multi-GCP warping |
+| Mechanism                  | What it is                                                                                                                                                                                                            | Fit for user-upload stretch                                           |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **`image` source**         | Single image texture placed by 4 geographic corners; rendered via a **`raster` layer**                                                                                                                                | **Primary fit** for plan/photo overlays                               |
+| **`raster` source**        | XYZ/WMS **tile** pyramid ([Style Spec](https://maplibre.org/maplibre-style-spec/sources/#raster))                                                                                                                     | Needs tileserver / COG protocol; not a simple upload                  |
+| **`raster-dem`**           | Terrain RGB DEM tiles                                                                                                                                                                                                 | Unrelated to plan overlays                                            |
+| **`video` source**         | Same 4-corner model as image ([Style Spec](https://maplibre.org/maplibre-style-spec/sources/#video))                                                                                                                  | Same stretch model; video instead of still                            |
+| **`canvas` source**        | HTML canvas contents + 4 corners ([`CanvasSource`](https://maplibre.org/maplibre-gl-js/docs/API/classes/CanvasSource/), [spec](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/CanvasSourceSpecification/)) | Useful if you **pre-warp** pixels in 2D canvas, then place the result |
+| **`CustomLayerInterface`** | Draw directly into the map WebGL context ([docs](https://maplibre.org/maplibre-gl-js/docs/API/interfaces/CustomLayerInterface/))                                                                                      | Used by Allmaps MapLibre plugin for multi-GCP warping                 |
 
 ### Opacity, blend, z-order for tracing
 
@@ -227,13 +227,13 @@ Mathematically, four point correspondences determine a **homography / projective
 
 Summary aligned with [`@allmaps/transform` transformation types](https://allmaps.org/docs/packages/transform/) (min GCPs from their docs table):
 
-| Model | Typical min GCPs | UX it enables | Notes |
-| --- | --- | --- | --- |
-| **Helmert / similarity** | 2 | Translate, rotate, uniform scale | Shape-preserving; limited stretch |
-| **1st-order polynomial (affine)** | 3 | Translate, rotate, scale, shear | Parallel lines stay parallel |
-| **Projective** | 4 | Full quad stretch / perspective | Matches MapLibre 4-corner model well |
-| **Polynomial 2 / 3** | 6 / 10 | Mild / stronger bending | Needs more user picks |
-| **Thin Plate Spline (rubber sheet)** | 3+ (more = better) | Local pull-to-fit at each GCP | Exact at GCPs; Allmaps default ecosystem supports this |
+| Model                                | Typical min GCPs   | UX it enables                    | Notes                                                  |
+| ------------------------------------ | ------------------ | -------------------------------- | ------------------------------------------------------ |
+| **Helmert / similarity**             | 2                  | Translate, rotate, uniform scale | Shape-preserving; limited stretch                      |
+| **1st-order polynomial (affine)**    | 3                  | Translate, rotate, scale, shear  | Parallel lines stay parallel                           |
+| **Projective**                       | 4                  | Full quad stretch / perspective  | Matches MapLibre 4-corner model well                   |
+| **Polynomial 2 / 3**                 | 6 / 10             | Mild / stronger bending          | Needs more user picks                                  |
+| **Thin Plate Spline (rubber sheet)** | 3+ (more = better) | Local pull-to-fit at each GCP    | Exact at GCPs; Allmaps default ecosystem supports this |
 
 **User-facing patterns:**
 
@@ -243,35 +243,35 @@ Summary aligned with [`@allmaps/transform` transformation types](https://allmaps
 
 ### Browser libraries that compute transforms from control points
 
-| Library | Role | License / notes |
-| --- | --- | --- |
-| [`@allmaps/transform`](https://allmaps.org/docs/packages/transform/) | GCP → helmert / polynomial / projective / thinPlateSpline; MIT packages | Best geospatial-oriented option; pairs with `@allmaps/render` / MapLibre plugin |
-| [perspective-transform](https://www.npmjs.com/package/perspective-transform) | 4↔4 quad homography | Lightweight; not map-specific |
-| [Homography.js](https://github.com/Eric-Canas/Homography.js) / [`homography`](https://www.npmjs.com/package/homography) | Affine / projective / piecewise affine image warps | Good for warping pixels to canvas before overlay |
-| OpenLayers + custom affine | OL `ImageStatic` is **axis-aligned extent** only ([API](https://openlayers.org/en/latest/apidoc/module-ol_source_ImageStatic-Static.html)); community patterns use `addCoordinateTransforms` for affine ([discussion](https://github.com/openlayers/openlayers/discussions/15811)) | Useful reference; not MapLibre |
+| Library                                                                                                                 | Role                                                                                                                                                                                                                                                                               | License / notes                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`@allmaps/transform`](https://allmaps.org/docs/packages/transform/)                                                    | GCP → helmert / polynomial / projective / thinPlateSpline; MIT packages                                                                                                                                                                                                            | Best geospatial-oriented option; pairs with `@allmaps/render` / MapLibre plugin |
+| [perspective-transform](https://www.npmjs.com/package/perspective-transform)                                            | 4↔4 quad homography                                                                                                                                                                                                                                                                | Lightweight; not map-specific                                                   |
+| [Homography.js](https://github.com/Eric-Canas/Homography.js) / [`homography`](https://www.npmjs.com/package/homography) | Affine / projective / piecewise affine image warps                                                                                                                                                                                                                                 | Good for warping pixels to canvas before overlay                                |
+| OpenLayers + custom affine                                                                                              | OL `ImageStatic` is **axis-aligned extent** only ([API](https://openlayers.org/en/latest/apidoc/module-ol_source_ImageStatic-Static.html)); community patterns use `addCoordinateTransforms` for affine ([discussion](https://github.com/openlayers/openlayers/discussions/15811)) | Useful reference; not MapLibre                                                  |
 
 ---
 
 ## Survey of open-source apps & tools
 
-| Name | URL | User-facing flow | Technical approach | Relevance |
-| --- | --- | --- | --- | --- |
-| **MapLibre `image` source** | [Style Spec](https://maplibre.org/maplibre-style-spec/sources/#image), [ImageSource API](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/), [animate example](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/) | Developer places image with 4 corners; no built-in handles | WebGL texture + 4 geo corners via `raster` layer | **Core API for this project** |
-| **map-image-overlay** | [GitHub](https://github.com/CatCodeDanix/map-image-overlay) | Edit mode: free-form corner drag, rotate, scale; opacity / multi-layer | Stateless controller on MapLibre/Mapbox image coordinates | Closest ready-made MapLibre stretch UX; verify maturity |
-| **Mapbox image overlay drag demo** | [GitHub](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable) | Markers on corners; drag image / resize | `image` source + `setCoordinates` + markers | Pattern to copy in MapLibre |
-| **Allmaps Editor** | [editor.allmaps.org](https://editor.allmaps.org/), [allmaps.org](https://allmaps.org/), [workshop notes](https://pages.allmaps.org/workshops/2023-iiif-online-meeting.html) | Paste IIIF URL → mask → **side-by-side** image + world map → pick GCPs → auto-save annotation | IIIF Georeference Annotations; WebGL warp; no GIS tile bake | **Gold-standard GCP UX**; packages MIT, apps GPL-3.0 ([repo](https://github.com/allmaps/allmaps/)); IIIF-centric (adapt for local upload) |
-| **`@allmaps/maplibre`** | [docs](https://allmaps.org/docs/packages/maplibre/) | Display warped maps on MapLibre | `CustomLayerInterface` `WarpedMapLayer`; **no pitch** (`maxPitch: 0`) | Use if multi-GCP warp needed on MapLibre |
-| **IIIF Georeference Extension** | [iiif.io/api/extension/georef](https://iiif.io/api/extension/georef/) | Spec for GCPs + resource ↔ geo links as Web Annotations | Lightweight JSON instead of GeoTIFF derivatives | Good persistence format inspiration for GCP state |
-| **MapWarper / mapwarper.net** | [mapwarper.net](https://mapwarper.net/), [timwaters/mapwarper](https://github.com/timwaters/mapwarper/) (MIT) | Upload map → **Rectify**: dual panes → place control points → server warp → tiles/GeoTIFF/WMS | Rails + GDAL + PostGIS + MapServer/GeoServer | Classic UX to learn from; **server-side**—not browser-only |
-| **NYPL Map Warper** | [NYPL project page](https://www.nypl.org/digital-research/projects/map-warper) (archived 2021), [nypl-warper](https://github.com/nypl-spacetime/nypl-warper) | Same MapWarper-style GCP dual-pane for library maps | Fork of MapWarper stack | UX ancestry; archived as a service |
-| **Kartta Labs mapwarper** | [kartta-labs/mapwarper](https://github.com/kartta-labs/mapwarper/) (MIT) | Same georectify + digitize narrative | Cloud/K8s-oriented MapWarper fork | Same technique family |
-| **MapKnitter + Leaflet.DistortableImage** | [mapknitter.org](http://mapknitter.org) / [mapknitter](https://github.com/publiclab/mapknitter) (GPL-3.0), [Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage/) (BSD-2 / npm MIT) | Aerial photos on map; **distort / drag / rotate / scale** via corner handles; opacity toggle | Client-side **CSS3** perspectival distortion over Leaflet | **Best UX reference for corner-handle stretch**; Leaflet/DOM, not MapLibre WebGL |
-| **Leaflet `ImageOverlay`** | [Leaflet docs](https://leafletjs.com/reference.html#imageoverlay) | Bounds-based image on map | Axis-aligned geographic bounds (simpler than free quad) | Ancestor of overlay idea; less flexible than MapLibre 4 corners |
-| **leaflet-imageoverlay-gcp** | [frogcat/leaflet-imageoverlay-gcp](https://github.com/frogcat/leaflet-imageoverlay-gcp) | Overlay from list of `{imagePoint, latlng}` GCPs | Leaflet plugin; updatable GCPs | Shows GCP→overlay API shape |
-| **OpenLayers `ImageStatic`** | [API](https://openlayers.org/en/latest/apidoc/module-ol_source_ImageStatic-Static.html) | Place image by `imageExtent` [left, bottom, right, top] | No native free-quad / rotation in the source itself | Contrast: OL extent vs MapLibre corners |
-| **geotiff.js + MapLibre COG** | [geomatico/maplibre-cog-protocol](https://github.com/geomatico/maplibre-cog-protocol), [georaster-layer-for-leaflet](https://github.com/GeoTIFF/georaster-layer-for-leaflet) | Load already-georeferenced GeoTIFF/COG as tiles/layer | Range-request COG; not interactive stretch of a JPG | Relevant only if input is a GeoTIFF, not a plain scan |
-| **OSM iD editor** | [iD API.md](https://github.com/openstreetmap/iD/blob/master/API.md), [LearnOSM](https://learnosm.org/en/beginner/id-editor/) | Trace vectors over **TMS/WMS imagery**; opacity & **imagery offset** (shift only); custom background URL | Tile backgrounds; Mapillary etc. as photo overlays—not arbitrary image georef | Tracing UX (draw over basemap/imagery); **not** local image warp |
-| **JOSM imagery offset** | (desktop) | Nudge imagery | Offset only | Web-relevant only as “shift underlay” pattern; not stretch |
+| Name                                      | URL                                                                                                                                                                                                                                                           | User-facing flow                                                                                         | Technical approach                                                            | Relevance                                                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **MapLibre `image` source**               | [Style Spec](https://maplibre.org/maplibre-style-spec/sources/#image), [ImageSource API](https://maplibre.org/maplibre-gl-js/docs/API/classes/ImageSource/), [animate example](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-series-of-images/) | Developer places image with 4 corners; no built-in handles                                               | WebGL texture + 4 geo corners via `raster` layer                              | **Core API for this project**                                                                                                             |
+| **map-image-overlay**                     | [GitHub](https://github.com/CatCodeDanix/map-image-overlay)                                                                                                                                                                                                   | Edit mode: free-form corner drag, rotate, scale; opacity / multi-layer                                   | Stateless controller on MapLibre/Mapbox image coordinates                     | Closest ready-made MapLibre stretch UX; verify maturity                                                                                   |
+| **Mapbox image overlay drag demo**        | [GitHub](https://github.com/Mr-Excel/mapbox-with-image-overlay-dragable-resizeable)                                                                                                                                                                           | Markers on corners; drag image / resize                                                                  | `image` source + `setCoordinates` + markers                                   | Pattern to copy in MapLibre                                                                                                               |
+| **Allmaps Editor**                        | [editor.allmaps.org](https://editor.allmaps.org/), [allmaps.org](https://allmaps.org/), [workshop notes](https://pages.allmaps.org/workshops/2023-iiif-online-meeting.html)                                                                                   | Paste IIIF URL → mask → **side-by-side** image + world map → pick GCPs → auto-save annotation            | IIIF Georeference Annotations; WebGL warp; no GIS tile bake                   | **Gold-standard GCP UX**; packages MIT, apps GPL-3.0 ([repo](https://github.com/allmaps/allmaps/)); IIIF-centric (adapt for local upload) |
+| **`@allmaps/maplibre`**                   | [docs](https://allmaps.org/docs/packages/maplibre/)                                                                                                                                                                                                           | Display warped maps on MapLibre                                                                          | `CustomLayerInterface` `WarpedMapLayer`; **no pitch** (`maxPitch: 0`)         | Use if multi-GCP warp needed on MapLibre                                                                                                  |
+| **IIIF Georeference Extension**           | [iiif.io/api/extension/georef](https://iiif.io/api/extension/georef/)                                                                                                                                                                                         | Spec for GCPs + resource ↔ geo links as Web Annotations                                                  | Lightweight JSON instead of GeoTIFF derivatives                               | Good persistence format inspiration for GCP state                                                                                         |
+| **MapWarper / mapwarper.net**             | [mapwarper.net](https://mapwarper.net/), [timwaters/mapwarper](https://github.com/timwaters/mapwarper/) (MIT)                                                                                                                                                 | Upload map → **Rectify**: dual panes → place control points → server warp → tiles/GeoTIFF/WMS            | Rails + GDAL + PostGIS + MapServer/GeoServer                                  | Classic UX to learn from; **server-side**—not browser-only                                                                                |
+| **NYPL Map Warper**                       | [NYPL project page](https://www.nypl.org/digital-research/projects/map-warper) (archived 2021), [nypl-warper](https://github.com/nypl-spacetime/nypl-warper)                                                                                                  | Same MapWarper-style GCP dual-pane for library maps                                                      | Fork of MapWarper stack                                                       | UX ancestry; archived as a service                                                                                                        |
+| **Kartta Labs mapwarper**                 | [kartta-labs/mapwarper](https://github.com/kartta-labs/mapwarper/) (MIT)                                                                                                                                                                                      | Same georectify + digitize narrative                                                                     | Cloud/K8s-oriented MapWarper fork                                             | Same technique family                                                                                                                     |
+| **MapKnitter + Leaflet.DistortableImage** | [mapknitter.org](http://mapknitter.org) / [mapknitter](https://github.com/publiclab/mapknitter) (GPL-3.0), [Leaflet.DistortableImage](https://github.com/publiclab/Leaflet.DistortableImage/) (BSD-2 / npm MIT)                                               | Aerial photos on map; **distort / drag / rotate / scale** via corner handles; opacity toggle             | Client-side **CSS3** perspectival distortion over Leaflet                     | **Best UX reference for corner-handle stretch**; Leaflet/DOM, not MapLibre WebGL                                                          |
+| **Leaflet `ImageOverlay`**                | [Leaflet docs](https://leafletjs.com/reference.html#imageoverlay)                                                                                                                                                                                             | Bounds-based image on map                                                                                | Axis-aligned geographic bounds (simpler than free quad)                       | Ancestor of overlay idea; less flexible than MapLibre 4 corners                                                                           |
+| **leaflet-imageoverlay-gcp**              | [frogcat/leaflet-imageoverlay-gcp](https://github.com/frogcat/leaflet-imageoverlay-gcp)                                                                                                                                                                       | Overlay from list of `{imagePoint, latlng}` GCPs                                                         | Leaflet plugin; updatable GCPs                                                | Shows GCP→overlay API shape                                                                                                               |
+| **OpenLayers `ImageStatic`**              | [API](https://openlayers.org/en/latest/apidoc/module-ol_source_ImageStatic-Static.html)                                                                                                                                                                       | Place image by `imageExtent` [left, bottom, right, top]                                                  | No native free-quad / rotation in the source itself                           | Contrast: OL extent vs MapLibre corners                                                                                                   |
+| **geotiff.js + MapLibre COG**             | [geomatico/maplibre-cog-protocol](https://github.com/geomatico/maplibre-cog-protocol), [georaster-layer-for-leaflet](https://github.com/GeoTIFF/georaster-layer-for-leaflet)                                                                                  | Load already-georeferenced GeoTIFF/COG as tiles/layer                                                    | Range-request COG; not interactive stretch of a JPG                           | Relevant only if input is a GeoTIFF, not a plain scan                                                                                     |
+| **OSM iD editor**                         | [iD API.md](https://github.com/openstreetmap/iD/blob/master/API.md), [LearnOSM](https://learnosm.org/en/beginner/id-editor/)                                                                                                                                  | Trace vectors over **TMS/WMS imagery**; opacity & **imagery offset** (shift only); custom background URL | Tile backgrounds; Mapillary etc. as photo overlays—not arbitrary image georef | Tracing UX (draw over basemap/imagery); **not** local image warp                                                                          |
+| **JOSM imagery offset**                   | (desktop)                                                                                                                                                                                                                                                     | Nudge imagery                                                                                            | Offset only                                                                   | Web-relevant only as “shift underlay” pattern; not stretch                                                                                |
 
 **Takeaway for geometrie-nachzeichnen:** see [Code references & implementation plan](#code-references--implementation-plan). Short version: implement MapLibre `image` + `setCoordinates` following **map-image-overlay**; steal UX ideas from **DistortableImage**; skip Allmaps/MapWarper until 4 corners fail.
 
@@ -290,12 +290,12 @@ This matches OSM digitizing (trace over imagery) and MapWarper’s “Digitizer�
 
 ### Map layer vs HTML/canvas overlay
 
-| Approach | Pros | Cons |
-| --- | --- | --- |
-| **MapLibre `image` / `canvas` source** | Stays in map CRS; pans/zooms/pitch with map; same hit-testing/coords as drawn GeoJSON; opacity via paint | Limited to 4-corner (or pre-warped canvas); known edge cases with terrain/DEM ([issue discussion](https://github.com/maplibre/maplibre-gl-js/issues/5149)) |
-| **Allmaps custom layer** | True multi-GCP warp in WebGL | Pitch unsupported; IIIF-oriented; heavier stack |
-| **HTML `<img>` / canvas over the map div** | Easy CSS transforms | Easy to desync from map projection on rotate/pitch/zoom; harder tracing accuracy |
-| **Leaflet.DistortableImage (DOM)** | Excellent edit UX | Different map stack; CSS3 vs WebGL |
+| Approach                                   | Pros                                                                                                     | Cons                                                                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MapLibre `image` / `canvas` source**     | Stays in map CRS; pans/zooms/pitch with map; same hit-testing/coords as drawn GeoJSON; opacity via paint | Limited to 4-corner (or pre-warped canvas); known edge cases with terrain/DEM ([issue discussion](https://github.com/maplibre/maplibre-gl-js/issues/5149)) |
+| **Allmaps custom layer**                   | True multi-GCP warp in WebGL                                                                             | Pitch unsupported; IIIF-oriented; heavier stack                                                                                                            |
+| **HTML `<img>` / canvas over the map div** | Easy CSS transforms                                                                                      | Easy to desync from map projection on rotate/pitch/zoom; harder tracing accuracy                                                                           |
+| **Leaflet.DistortableImage (DOM)**         | Excellent edit UX                                                                                        | Different map stack; CSS3 vs WebGL                                                                                                                         |
 
 **Recommendation for tracing accuracy:** keep the image as a **map layer** so drawn vertices and the underlay share the same camera and projection. Use HTML overlays only for handles UI if needed—not for the georeferenced image itself.
 
@@ -303,12 +303,12 @@ This matches OSM digitizing (trace over imagery) and MapWarper’s “Digitizer�
 
 ## Client-only storage model
 
-| Data | Where | Why |
-| --- | --- | --- |
-| **Image bytes** | Memory (`File` / `Blob` / `ImageBitmap`); optional **IndexedDB** for session restore | Images are large binary; Web Storage stores **strings only** and is quota-sensitive ([MDN Web Storage](https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API)); IndexedDB is designed for larger structured/binary data ([MDN IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB)) |
-| **Display URL** | `URL.createObjectURL(blob)` while on screen; **`revokeObjectURL`** when done ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static)) | Blob URLs are not durable across sessions and hold memory |
-| **Four corners / opacity / lock flag** | React/Zustand (or similar) + **`localStorage` JSON** | Small, stringifiable; survives reload without re-picking stretch |
-| **GCP list (if multi-point)** | `localStorage` or IndexedDB JSON (Allmaps-style annotation shape is a good template—[Georeference Extension](https://iiif.io/api/extension/georef/), [`@allmaps/annotation`](https://allmaps.org/docs/packages/annotation/)) | Small metadata; can restore warp without re-upload **if image is also in IndexedDB** |
+| Data                                   | Where                                                                                                                                                                                                                        | Why                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Image bytes**                        | Memory (`File` / `Blob` / `ImageBitmap`); optional **IndexedDB** for session restore                                                                                                                                         | Images are large binary; Web Storage stores **strings only** and is quota-sensitive ([MDN Web Storage](https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API)); IndexedDB is designed for larger structured/binary data ([MDN IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB)) |
+| **Display URL**                        | `URL.createObjectURL(blob)` while on screen; **`revokeObjectURL`** when done ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static))                                                            | Blob URLs are not durable across sessions and hold memory                                                                                                                                                                                                                                                                                                      |
+| **Four corners / opacity / lock flag** | React/Zustand (or similar) + **`localStorage` JSON**                                                                                                                                                                         | Small, stringifiable; survives reload without re-picking stretch                                                                                                                                                                                                                                                                                               |
+| **GCP list (if multi-point)**          | `localStorage` or IndexedDB JSON (Allmaps-style annotation shape is a good template—[Georeference Extension](https://iiif.io/api/extension/georef/), [`@allmaps/annotation`](https://allmaps.org/docs/packages/annotation/)) | Small metadata; can restore warp without re-upload **if image is also in IndexedDB**                                                                                                                                                                                                                                                                           |
 
 **Persist transform without re-uploading:** on reload, read corners from `localStorage`, read image from IndexedDB (or ask user to re-select the file if you skip IndexedDB), then `addSource` / `updateImage({ image })` + `setCoordinates`. Do **not** put base64 images in `localStorage` (quota / performance).
 
