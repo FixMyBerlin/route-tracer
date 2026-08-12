@@ -6,6 +6,12 @@ minimumReleaseAgeExcludes = [
   "typescript",
   "@typescript/typescript-darwin-arm64",
   "@typescript/typescript-linux-x64",
+  "@osm-editor-kit/osm-coverage",
+  "@osm-editor-kit/osm-data",
+  "@osm-editor-kit/osm-map-url",
+  "@osm-editor-kit/osm-maplibre",
+  "@osm-editor-kit/osm-route-snapper",
+  "@osm-editor-kit/osm-way-chain",
 ]
 
 linker = "isolated"

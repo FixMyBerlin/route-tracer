@@ -10,15 +10,7 @@ Domain language and terminology: [`CONTEXT.md`](./CONTEXT.md).
 
 Requires [Bun](https://bun.sh) (≥ 1.3.14).
 
-This repo depends on local packages from [street-space-editor](https://github.com/FixMyBerlin/street-space-editor) via path deps. Clone that repo as a sibling of this one so these paths resolve:
-
-- `../../OSM/street-space-editor/packages/osm-map-url`
-- `../../OSM/street-space-editor/packages/osm-maplibre`
-- `../../OSM/street-space-editor/packages/osm-coverage`
-- `../../OSM/street-space-editor/packages/osm-data`
-- `../../OSM/street-space-editor/packages/osm-way-chain`
-
-If `bun run type-check` fails inside `@osm-editor-kit/osm-data`, you may need a local null-check fix in that package until upstream is patched.
+Depends on `@osm-editor-kit/*` **alpha** packages from npm (`0.1.0-alpha.0`). Install with Bun; no local street-space-editor clone is required. A `package.json` override pins `@osm-editor-kit/osm-data` so nested `workspace:*` ranges in the first alpha tarballs resolve on npm.
 
 ```bash
 bun install

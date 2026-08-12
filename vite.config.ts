@@ -9,7 +9,6 @@ import browserslistToEsbuild from 'browserslist-to-esbuild'
 import { defineConfig, type Plugin } from 'vite'
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
-const streetSpaceRoot = path.resolve(projectRoot, '../../OSM/street-space-editor')
 const bunLinksCache = path.join(os.homedir(), '.bun/install/cache/links')
 
 /** Keep in sync with `src/shared/site-base.ts`. */
@@ -46,7 +45,7 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     host: '127.0.0.1',
     fs: {
-      allow: [projectRoot, streetSpaceRoot, bunLinksCache],
+      allow: [projectRoot, bunLinksCache],
     },
   },
   build: {
