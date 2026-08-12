@@ -1,52 +1,73 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useDebouncedCallback } from '@tanstack/react-pacer'
 import { useRef, useState } from 'react'
 import { Route } from '@/routes/index'
 import { cn } from '@/shared/cn'
-import { encodeOverlaySearch } from '@/shared/reference-image/overlay-search-codec'
 import {
   useHasReferenceImage,
   useReferenceImageActions,
   useReferenceImageLocked,
 } from '@/shared/reference-image/reference-image-store'
 import { DEFAULT_OVERLAY_OPACITY } from '@/shared/reference-image/types'
-import { serializeIndexSearch } from '@/shared/routing/search-schema'
+import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 
 type ReferenceImagePanelProps = {
   onImageFile: (file: File) => Promise<boolean>
 }
 
+type ImageSourceFieldProps = {
+  imageSource: string
+  onPersist: (value: string) => void
+}
+
+function ImageSourceField({ imageSource, onPersist }: ImageSourceFieldProps) {
+  const [draft, setDraft] = useState(imageSource)
+
+  return (
+    <input
+      type="url"
+      inputMode="url"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="https://…"
+      value={draft}
+      onChange={(event) => {
+        const nextValue = event.target.value
+        setDraft(nextValue)
+        onPersist(nextValue)
+      }}
+      className="mt-3 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+    />
+  )
+}
+
 export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
-  const navigate = useNavigate({ from: Route.fullPath })
+  const { updateSearch } = useIndexSearchNavigation()
   const overlay = Route.useSearch({ select: (search) => search.overlay })
+  const imageSource = Route.useSearch({ select: (search) => search.imageSource ?? '' })
   const hasImage = useHasReferenceImage()
   const locked = useReferenceImageLocked()
   const { clearImage, setLocked } = useReferenceImageActions()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = useState(false)
 
+  const persistImageSource = useDebouncedCallback(
+    (value: string) => {
+      const trimmed = value.trim()
+      updateSearch({ imageSource: trimmed || undefined })
+    },
+    { wait: 400 },
+  )
+
   const opacityPercent = Math.round((overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY) * 100)
 
   const updateOpacity = (opacity: number) => {
     if (!overlay?.corners) return
-    void navigate({
-      search: (prev) => ({
-        ...serializeIndexSearch(prev),
-        overlay: encodeOverlaySearch({ corners: overlay.corners, opacity }),
-      }),
-      replace: true,
-    })
+    updateSearch({ overlay: { corners: overlay.corners, opacity } })
   }
 
   const handleClear = () => {
     clearImage()
-    void navigate({
-      search: (prev) => {
-        const next = serializeIndexSearch(prev)
-        delete next.overlay
-        return next
-      },
-      replace: true,
-    })
+    updateSearch({ overlay: undefined })
   }
 
   const handleDrop = async (event: React.DragEvent<HTMLElement>) => {
@@ -103,11 +124,41 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
         />
       </div>
 
-      {overlay?.corners && !hasImage ? (
-        <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
-          Shared overlay alignment is in the URL. Paste or drop the plan image again to restore the
-          overlay.
+      <label className="mt-4 block">
+        <span className="text-xs font-medium tracking-wide text-slate-400 uppercase">
+          Image source <span className="font-normal text-slate-500 normal-case">(optional)</span>
+        </span>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Paste the URL to where to find the image so it&apos;s easier to share this app state and
+          work on it later.
         </p>
+        <ImageSourceField
+          key={imageSource}
+          imageSource={imageSource}
+          onPersist={persistImageSource}
+        />
+      </label>
+
+      {overlay?.corners && !hasImage ? (
+        <div className="mt-3 space-y-2 rounded-md border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+          <p>
+            Shared overlay alignment is in the URL. Paste or drop the plan image again to restore
+            the overlay.
+          </p>
+          {imageSource ? (
+            <p>
+              Image to paste:{' '}
+              <a
+                href={imageSource}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-sky-300 underline underline-offset-2 hover:text-sky-200"
+              >
+                {imageSource}
+              </a>
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {hasImage || overlay?.corners ? (
@@ -152,6 +203,18 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
               Clear
             </button>
           </div>
+
+          <button
+            type="button"
+            className="w-full rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+            disabled={!overlay?.corners}
+            onClick={() => {
+              setLocked(true)
+              updateSearch({ step: 'tracing' })
+            }}
+          >
+            Continue to tracing
+          </button>
         </div>
       ) : null}
     </section>

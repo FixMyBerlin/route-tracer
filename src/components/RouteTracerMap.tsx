@@ -1,52 +1,42 @@
-import { serializeMapParam, type MapParam } from '@osm-editor-kit/osm-map-url'
+import { type MapParam } from '@osm-editor-kit/osm-map-url'
 import { OPENFREEMAP_POSITRON_STYLE } from '@osm-editor-kit/osm-maplibre'
-import { useNavigate } from '@tanstack/react-router'
-import type { MapLibreEvent } from 'maplibre-gl'
+import type { MapLayerMouseEvent, MapLibreEvent } from 'maplibre-gl'
 import { useEffect } from 'react'
 import { AttributionControl, Map, useMap, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CoverageDebugOverlay } from '@/components/CoverageDebugOverlay'
+import { MapGeocodingControl } from '@/components/MapGeocodingControl'
 import { MapLoadingIndicator } from '@/components/MapLoadingIndicator'
-import { ReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
+import { useReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
 import { RouteSnapperHost } from '@/components/RouteSnapperHost'
+import { RouteToolLayers } from '@/components/RouteToolLayers'
 import { ViewMinZoomOverlay } from '@/components/ViewMinZoomOverlay'
-import { Route } from '@/routes/index'
 import {
   exposeCoverageLoaderForDebugging,
   exposeMainMapForDebugging,
 } from '@/shared/map/expose-main-map'
+import { useMapChromeActions } from '@/shared/map/map-chrome-store'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
 import { viewMinZoom } from '@/shared/routing/constants'
-import { serializeIndexSearch } from '@/shared/routing/search-schema'
+import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 import { useRouteCoveragePace } from '@/shared/routing/use-route-coverage-pace'
+import type { WorkflowStep } from '@/shared/routing/workflow-steps'
 
 type RouteTracerMapProps = {
   mapViewport: MapParam
   zoom: number
+  step: WorkflowStep
   onZoomChange: (zoom: number) => void
 }
 
-export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerMapProps) {
-  const navigate = useNavigate({ from: Route.fullPath })
-  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace()
-  const maps = useMap()
-  const mapRef = maps[MAIN_MAP_ID]
-  useEffect(() => {
-    const map = mapRef?.getMap()
-    if (!map) return
-
-    exposeMainMapForDebugging(map)
-    exposeCoverageLoaderForDebugging((m) => {
-      void loadCoverageNow(m)
-    })
-
-    if (map.getZoom() < viewMinZoom) return
-
-    // Do not call onZoomChange here — it re-renders the parent and can retrigger this
-    // effect when pace callbacks are not referentially stable.
-    scheduleCoverageCheck(map)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- map instance appearance only
-  }, [mapRef])
+export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteTracerMapProps) {
+  const { updateSearch } = useIndexSearchNavigation()
+  const tracing = step === 'tracing'
+  const imageEditable = step === 'image'
+  const { scheduleCoverageCheck, loadCoverageNow } = useRouteCoveragePace({ enabled: tracing })
+  const { markMapLoaded } = useMapChromeActions()
+  const { mapHandlers: referenceImageHandlers, layers: referenceImageLayers } =
+    useReferenceImageOverlay({ editable: imageEditable })
 
   return (
     <>
@@ -63,38 +53,75 @@ export function RouteTracerMap({ mapViewport, zoom, onZoomChange }: RouteTracerM
         doubleClickZoom={false}
         style={{ width: '100%', height: '100%' }}
         attributionControl={false}
+        interactiveLayerIds={referenceImageHandlers.interactiveLayerIds}
         onLoad={(event: MapLibreEvent) => {
           const map = event.target
+          markMapLoaded()
           exposeMainMapForDebugging(map)
+          exposeCoverageLoaderForDebugging((m) => {
+            void loadCoverageNow(m)
+          })
           onZoomChange(map.getZoom())
-          if (map.getZoom() >= viewMinZoom) {
+          if (tracing && map.getZoom() >= viewMinZoom) {
             scheduleCoverageCheck(map)
           }
         }}
+        onMouseDown={(event: MapLayerMouseEvent) => {
+          referenceImageHandlers.onMouseDown(event)
+        }}
+        onMouseMove={(event: MapLayerMouseEvent) => {
+          referenceImageHandlers.onMouseMove(event)
+        }}
+        onMouseUp={(event: MapLayerMouseEvent) => {
+          referenceImageHandlers.onMouseUp(event)
+        }}
+        onMouseLeave={(event: MapLayerMouseEvent) => {
+          referenceImageHandlers.onMouseLeave(event)
+        }}
         onMove={(event: ViewStateChangeEvent) => {
           onZoomChange(event.viewState.zoom)
-          scheduleCoverageCheck(event.target)
+          if (tracing) scheduleCoverageCheck(event.target)
         }}
         onMoveEnd={(event: ViewStateChangeEvent) => {
           const { latitude, longitude, zoom: nextZoom, bearing } = event.viewState
           onZoomChange(nextZoom)
-          scheduleCoverageCheck(event.target)
-          void navigate({
-            search: (prev) => ({
-              ...serializeIndexSearch(prev),
-              map: serializeMapParam({ zoom: nextZoom, lat: latitude, lng: longitude, bearing }),
-            }),
-            replace: true,
+          if (tracing) scheduleCoverageCheck(event.target)
+          updateSearch({
+            map: { zoom: nextZoom, lat: latitude, lng: longitude, bearing },
           })
         }}
       >
         <AttributionControl compact position="bottom-right" />
-        <ReferenceImageOverlay />
-        <CoverageDebugOverlay />
-        <RouteSnapperHost />
+        <MapGeocodingControl />
+        {referenceImageLayers}
+        <RouteToolLayers />
+        {tracing ? <CoverageDebugOverlay /> : null}
+        {tracing ? <RouteSnapperHost /> : null}
+        {tracing ? <TracingCoverageKick onReady={scheduleCoverageCheck} /> : null}
       </Map>
       <MapLoadingIndicator />
-      <ViewMinZoomOverlay zoom={zoom} />
+      {tracing ? <ViewMinZoomOverlay zoom={zoom} /> : null}
     </>
   )
+}
+
+type TracingCoverageKickProps = {
+  onReady: (map: import('maplibre-gl').Map) => void
+}
+
+/** Schedules Overpass coverage once when entering the tracing step (map may already be loaded). */
+function TracingCoverageKick({ onReady }: TracingCoverageKickProps) {
+  const maps = useMap()
+  const mapRef = maps[MAIN_MAP_ID]
+
+  useEffect(
+    function kickCoverageOnTraceEnter() {
+      const map = mapRef?.getMap()
+      if (!map) return
+      onReady(map)
+    },
+    [mapRef, onReady],
+  )
+
+  return null
 }

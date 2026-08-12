@@ -1,10 +1,8 @@
 import { useDebouncedCallback } from '@tanstack/react-pacer'
-import { useNavigate } from '@tanstack/react-router'
 import { useRef } from 'react'
 import { Route } from '@/routes/index'
-import { encodeRouteSearch } from '@/shared/routing/route-search-codec'
 import type { RouteSegment } from '@/shared/routing/route-segments'
-import { serializeIndexSearch } from '@/shared/routing/search-schema'
+import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 
 export function useRouteUrlSegments() {
   return Route.useSearch({ select: (search) => search.route })
@@ -18,33 +16,20 @@ export function useSkipInitialRoutePersist() {
 }
 
 export function usePersistRouteSegments() {
-  const navigate = useNavigate({ from: Route.fullPath })
+  const { updateSearch } = useIndexSearchNavigation()
 
   return useDebouncedCallback(
     (segments: RouteSegment[]) => {
-      void navigate({
-        search: (prev) => ({
-          ...serializeIndexSearch(prev),
-          route: segments.length > 0 ? encodeRouteSearch(segments) : undefined,
-        }),
-        replace: true,
-      })
+      updateSearch({ route: segments.length > 0 ? segments : undefined })
     },
     { wait: 300 },
   )
 }
 
 export function useClearRouteFromUrl() {
-  const navigate = useNavigate({ from: Route.fullPath })
+  const { updateSearch } = useIndexSearchNavigation()
 
   return () => {
-    void navigate({
-      search: (prev) => {
-        const next = serializeIndexSearch(prev)
-        delete next.route
-        return next
-      },
-      replace: true,
-    })
+    updateSearch({ route: undefined })
   }
 }
