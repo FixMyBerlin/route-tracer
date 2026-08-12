@@ -10,4 +10,13 @@
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
   }
+
+  button:not(:disabled),
+  a[href] {
+    @apply cursor-pointer;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
 }
