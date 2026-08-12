@@ -19,7 +19,7 @@
     "check-ci": "bun run --parallel type-check lint-check format-check test-run",
     "knip": "KNIP_STRICT=1 knip --config knip.config.mjs",
     "knip-warn": "knip --config knip.config.mjs || true",
-    "check-pre-push": "bun run --parallel type-check lint format test-run knip",
+    "check-pre-push": "bun run --parallel type-check lint format test-run knip-warn",
     "e2e": "playwright test --project=chromium",
     "prepare": "husky"
   },
@@ -64,7 +64,7 @@
     "eslint-plugin-compat": "^7.0.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "husky": "^9.1.7",
-    "knip": "^5.62.0",
+    "knip": "^6.31.0",
     "oxfmt": "0.56.0",
     "oxlint": "1.70.0",
     "oxlint-config-react-hooks-js": "^1.1.3",

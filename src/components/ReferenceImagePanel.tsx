@@ -93,7 +93,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
       <h2 className="text-sm font-medium text-white">Reference image</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
         Drop a plan image here, paste anywhere on the page, or choose a file. The image stays in
-        memory only; corners and opacity are shareable via the URL.
+        memory only; corners, opacity, and an optional source URL are shareable via the URL.
       </p>
 
       <div

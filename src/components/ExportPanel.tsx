@@ -78,7 +78,8 @@ export function ExportPanel() {
         Copy shareable link
       </button>
       <p className="mt-2 text-xs leading-5 text-slate-500">
-        Route geometry is already encoded in the URL. Reload or share the address bar link.
+        Route geometry, overlay alignment, and image source are encoded in the URL. Reload or share
+        the address bar link.
       </p>
     </section>
   )
