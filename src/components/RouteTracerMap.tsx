@@ -7,6 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { CoverageDebugOverlay } from '@/components/CoverageDebugOverlay'
 import { MapGeocodingControl } from '@/components/MapGeocodingControl'
 import { MapLoadingIndicator } from '@/components/MapLoadingIndicator'
+import { NetworkHighlightLayers } from '@/components/NetworkHighlightLayers'
 import { useReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
 import { RouteSnapperHost } from '@/components/RouteSnapperHost'
 import { RouteToolLayers } from '@/components/RouteToolLayers'
@@ -93,6 +94,7 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
       >
         <AttributionControl compact position="bottom-right" />
         <MapGeocodingControl />
+        {tracing ? <NetworkHighlightLayers /> : null}
         {referenceImageLayers}
         <RouteToolLayers />
         {tracing ? <CoverageDebugOverlay /> : null}

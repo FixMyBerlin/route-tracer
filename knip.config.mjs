@@ -13,7 +13,7 @@ export default {
     'tests/**/*.ts',
     'src/shared/site-base.ts',
   ],
-  ignore: ['.agents/**', 'src/routeTree.gen.ts', 'vendor/**'],
+  ignore: ['.agents/**', 'src/routeTree.gen.ts'],
   ignoreBinaries: ['code', 'gh', 'rg'],
   rules: {
     files: 'error',
