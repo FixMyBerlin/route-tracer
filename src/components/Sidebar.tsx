@@ -10,14 +10,25 @@ type SidebarProps = {
   zoom: number
 }
 
-const stepCopy: Record<WorkflowStep, { title: string; description: string }> = {
+const stepCopy: Record<WorkflowStep, { title: string; description: React.ReactNode }> = {
   image: {
     title: 'Align the reference image',
     description: 'Paste or drop a plan, then stretch the corners until it matches the basemap.',
   },
   tracing: {
     title: 'Trace the route',
-    description: 'Draw snapped OSM stretches and manual segments where the basemap cannot follow.',
+    description: (
+      <>
+        Click on the map to draw the route. Use{' '}
+        <kbd
+          className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-slate-400"
+          title="Press S to switch draw mode"
+        >
+          S
+        </kbd>{' '}
+        to toggle freehand and route snapping.
+      </>
+    ),
   },
   export: {
     title: 'Export the route',
@@ -34,7 +45,7 @@ export function Sidebar({ onImageFile, zoom }: SidebarProps) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         <div className="border-b border-slate-800 pb-5">
           <h1 className="text-lg font-semibold text-white">{copy.title}</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{copy.description}</p>
+          <p className="mt-2 text-sm leading-tight text-slate-400">{copy.description}</p>
         </div>
 
         {step === 'image' ? <ReferenceImagePanel onImageFile={onImageFile} /> : null}

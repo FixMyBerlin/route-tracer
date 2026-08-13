@@ -84,12 +84,12 @@ export function RoutePanel() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-white">Route segments</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
+          <p className="mt-2 text-sm leading-tight text-slate-400">
             {!graphReady
               ? 'Zoom in and wait for the routing graph before drawing.'
               : drawMode === 'snapped'
-                ? 'Click the black dotted network to snap along OSM. Drag red handles to reshape.'
-                : 'Continues from the end of your route. Click to place orange freehand points; each click adds a straight manual segment. Press S to snap again from the last freehand point.'}
+                ? 'Click the purple network to snap along OSM. Press S to switch the current line to freehand.'
+                : 'Click to place freehand points. Press S to leave freehand and snap again from the cursor (or last point near a road).'}
           </p>
         </div>
         {segments.length > 0 && (
@@ -98,10 +98,10 @@ export function RoutePanel() {
       </div>
 
       <fieldset className="mt-4" disabled={!graphReady}>
-        <legend className="flex items-center gap-2 text-xs font-medium text-slate-400">
+        <legend className="flex items-center gap-2 text-sm text-slate-400">
           Draw mode
           <kbd
-            className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-slate-200"
+            className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-slate-400"
             title="Press S to switch draw mode"
           >
             S
@@ -111,7 +111,7 @@ export function RoutePanel() {
           {drawModes.map((option) => (
             <label
               key={option.value}
-              className="flex cursor-pointer items-center gap-2 text-sm text-slate-300"
+              className="flex cursor-pointer items-center gap-2 text-sm text-slate-400"
             >
               <input
                 type="radio"
@@ -125,7 +125,7 @@ export function RoutePanel() {
                 aria-hidden
                 className={
                   option.dashed
-                    ? 'inline-block h-0.5 w-4 shrink-0 border-t-2 border-dashed'
+                    ? 'inline-block h-0.5 w-4 shrink-0 border-t-2 border-dotted'
                     : 'inline-block h-1 w-4 shrink-0 rounded-full'
                 }
                 style={
@@ -139,37 +139,11 @@ export function RoutePanel() {
           ))}
         </div>
       </fieldset>
-      <p className="mt-1 text-xs leading-5 text-slate-500">
-        Mode stays active until you press <span className="font-medium text-slate-400">S</span>{' '}
-        again (or pick the other option).
-      </p>
-
-      <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-        <p className="text-xs font-medium text-slate-400">Legend</p>
-        <ul className="mt-2 space-y-1.5 text-xs text-slate-300">
-          <li className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-block h-1 w-4 shrink-0 rounded-full"
-              style={{ backgroundColor: ROUTE_SEGMENT_COLORS.snapped }}
-            />
-            Snapped (OSM network)
-          </li>
-          <li className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-block h-0.5 w-4 shrink-0 border-t-2 border-dashed"
-              style={{ borderColor: ROUTE_SEGMENT_COLORS.freehand }}
-            />
-            Freehand (manual)
-          </li>
-        </ul>
-      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 disabled:opacity-40"
           disabled={!graphReady || undoLength === 0}
           onClick={() => undoRouteEdit()}
         >
@@ -177,7 +151,7 @@ export function RoutePanel() {
         </button>
         <button
           type="button"
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 disabled:opacity-40"
           disabled={segments.length === 0}
           onClick={handleClearRoute}
         >
@@ -192,7 +166,7 @@ export function RoutePanel() {
               key={segment.segment_index}
               className="flex items-center justify-between py-2.5 text-sm"
             >
-              <span className="text-slate-200">
+              <span className="text-slate-400">
                 {segment.segment_index + 1}.{' '}
                 {segment.segment_kind === 'snapped' ? 'Snapped' : 'Freehand'}
               </span>
@@ -210,7 +184,7 @@ export function RoutePanel() {
           ))}
         </ol>
       ) : (
-        <p className="mt-4 text-sm text-slate-500">No route segments yet.</p>
+        <p className="mt-4 text-sm text-slate-400">No route segments yet.</p>
       )}
 
       <button

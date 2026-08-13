@@ -39,7 +39,7 @@ export function ViewMinZoomOverlay({ zoom }: ViewMinZoomOverlayProps) {
     >
       <div className="pointer-events-auto rounded-xl bg-slate-950/95 px-3 py-2.5 text-left shadow-lg ring-1 ring-slate-700 backdrop-blur-sm">
         <p className="text-sm font-medium text-white">Zoom in to load OSM</p>
-        <p className="mt-1 text-xs leading-5 text-slate-400">
+        <p className="mt-1 text-xs leading-tight text-slate-400">
           Street data for routing loads at zoom {viewMinZoom} and above (current zoom{' '}
           {formatZoom(zoom)}).
         </p>

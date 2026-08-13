@@ -45,7 +45,7 @@ export function ExportPanel() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-white">Export</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
+          <p className="mt-2 text-sm leading-tight text-slate-400">
             Download a GeoJSON FeatureCollection with one LineString per segment.
           </p>
         </div>
@@ -57,7 +57,7 @@ export function ExportPanel() {
         ) : null}
       </div>
 
-      <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+      <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-slate-400">
         <input
           type="checkbox"
           className="rounded border-slate-700 bg-slate-900 text-sky-500"
@@ -76,13 +76,13 @@ export function ExportPanel() {
       </button>
       <button
         type="button"
-        className="mt-2 w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+        className="mt-2 w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 disabled:opacity-40"
         disabled={segments.length === 0}
         onClick={() => void handleCopyLink()}
       >
         Copy shareable link
       </button>
-      <p className="mt-2 text-xs leading-5 text-slate-500">
+      <p className="mt-2 text-sm leading-tight text-slate-400">
         Route geometry, overlay alignment, and image source are encoded in the URL. Reload or share
         the address bar link.
       </p>

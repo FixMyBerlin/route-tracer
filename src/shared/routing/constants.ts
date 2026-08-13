@@ -4,14 +4,14 @@ export const viewMinZoom = 15
 /** Debounce map moves before triggering Overpass coverage fetches. */
 export const coverageFetchDebounceMs = 400
 
-/** Overpass casing (sky) vs routing-graph dotted outline (black). */
+/** Overpass casing (sky) vs routing-graph casing (purple). */
 export const NETWORK_HIGHLIGHT_COLORS = {
   overpass: '#38bdf8',
-  routing: '#0f172a',
+  routing: '#7c3aed',
 } as const
 
 /** Route segment paints — keep map layers, legend, and list swatches in sync. */
 export const ROUTE_SEGMENT_COLORS = {
-  snapped: '#0284c7',
-  freehand: '#ea580c',
+  snapped: '#0f172a',
+  freehand: '#0f172a',
 } as const
