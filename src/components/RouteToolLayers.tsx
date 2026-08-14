@@ -1,7 +1,6 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
 import {
   ROUTE_LINE_WIDTH_PX,
-  ROUTE_NODE_RADIUS_PX,
   ROUTE_SEGMENT_COLORS,
   ROUTE_SNAPPED_LINE_OFFSET_PX,
   ROUTE_WAYPOINT_COLORS,
@@ -9,7 +8,6 @@ import {
 } from '@/shared/routing/constants'
 import {
   ROUTE_MANUAL_LAYER_ID,
-  ROUTE_NODE_LAYER_ID,
   ROUTE_SNAPPED_LAYER_ID,
   ROUTE_TOOL_SOURCE_ID,
   ROUTE_WAYPOINT_LABEL_LAYER_ID,
@@ -19,7 +17,7 @@ import { useRouteToolGeoJson } from '@/shared/routing/route-store'
 
 /**
  * Declarative paint for route-snapper `renderGeojson()` output:
- * LineStrings (`snapped`) plus Points (`snapped-waypoint` / `free-waypoint` / `node`).
+ * LineStrings (`snapped`) plus Points (`snapped-waypoint` / `free-waypoint`).
  *
  * Filters use expression syntax only (no legacy `$type`) so they can combine with `get`.
  */
@@ -54,23 +52,6 @@ export function RouteToolLayers() {
           'line-color': ROUTE_SEGMENT_COLORS.freehand,
           'line-width': ROUTE_LINE_WIDTH_PX,
           'line-dasharray': [0.5, 1.5],
-        }}
-      />
-      <Layer
-        id={ROUTE_NODE_LAYER_ID}
-        type="circle"
-        filter={['all', ['==', ['geometry-type'], 'Point'], ['==', ['get', 'type'], 'node']]}
-        paint={{
-          'circle-radius': [
-            'case',
-            ['has', 'hovered'],
-            ROUTE_NODE_RADIUS_PX + 2,
-            ROUTE_NODE_RADIUS_PX,
-          ],
-          'circle-color': '#0f172a',
-          'circle-stroke-color': '#f8fafc',
-          'circle-stroke-width': 1.5,
-          'circle-opacity': ['case', ['has', 'hovered'], 0.55, 1],
         }}
       />
       <Layer
