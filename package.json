@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@maptiler/geocoding-control": "^3.0.0",
-    "@osm-editor-kit/osm-coverage": "file:../../OSM/street-space-editor/packages/osm-coverage",
+    "@osm-editor-kit/osm-coverage": "0.1.0-alpha.2",
     "@osm-editor-kit/osm-data": "0.1.0-alpha.0",
     "@osm-editor-kit/osm-map-url": "0.1.0-alpha.0",
     "@osm-editor-kit/osm-maplibre": "0.1.0-alpha.0",
