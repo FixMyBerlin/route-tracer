@@ -4,6 +4,9 @@ Trace a route from a reference image onto a real map, adjust it along OpenStreet
 
 **Try it:** [fixmyberlin.github.io/route-tracer](https://fixmyberlin.github.io/route-tracer/)
 
+> [!NOTE]
+> Interactive route snapping is powered by [route-snapper](https://github.com/dabreegster/route_snapper) by Dustin Carlino — thank you, Dustin!
+
 ## What it does
 
 You have a picture of an existing route — a plan, sketch, or map graphic — and want proper map geometry for it. Route Tracer helps you:
