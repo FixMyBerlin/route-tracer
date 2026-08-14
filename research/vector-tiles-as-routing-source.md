@@ -39,7 +39,7 @@ Overpass highway XML  →  @osm-editor-kit/osm-route-snapper  →  route-snapper
 | Draw / snap UX | `route-snapper-ts` `RouteTool`                                       |
 | Export         | Geometry-first segments; optional `osm_way_ids` deferred             |
 
-Domain language: [`CONTEXT.md`](../CONTEXT.md). Sibling research on the A/B Street / Overpass stack: [`abstreet-routing-overpass-interactive.md`](./abstreet-routing-overpass-interactive.md).
+User-facing overview: [`README.md`](../README.md). Sibling research on the A/B Street / Overpass stack: [`abstreet-routing-overpass-interactive.md`](./abstreet-routing-overpass-interactive.md).
 
 ---
 

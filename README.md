@@ -1,16 +1,49 @@
 # Route Tracer
 
-Browser app to **trace an existing route** from a temporary reference image into proper map geometry: mostly OSM-snapped segments, with explicit manual stretches where OSM cannot follow reality (for example a new bridge).
+Trace a route from a reference image onto a real map, adjust it along OpenStreetMap roads, and export the geometry as GeoJSON. The exported route is the deliverable — you can share it, open it elsewhere, or come back later and trace again from the same plan.
 
-Export is a GeoJSON `FeatureCollection` of segment LineStrings. The reference image stays in the browser only and is never uploaded.
+**Try it:** [fixmyberlin.github.io/route-tracer](https://fixmyberlin.github.io/route-tracer/)
 
-Domain language and terminology: [`CONTEXT.md`](./CONTEXT.md).
+## What it does
 
-## Development
+You have a picture of an existing route — a plan, sketch, or map graphic — and want proper map geometry for it. Route Tracer helps you:
+
+1. Place that picture on top of a basemap and line it up with the streets.
+2. Draw the route on the map, mostly following the OpenStreetMap road network.
+3. Export the result as GeoJSON.
+
+The whole app runs in your browser — nothing is uploaded to a server. Almost everything you do is encoded in the URL, so you can bookmark the page, share a link, or pick up later where you left off: map position, overlay alignment, route geometry, and an optional link to where the plan lives. The image file itself is not in the URL; on another device or after the local copy expires, paste or drop the plan again — the corners and opacity from the link still apply.
+
+## Three steps
+
+### 1. Align the reference image
+
+Paste or drop your plan image (Ctrl/Cmd+V works anywhere on the page). Drag the corner handles until the graphic sits on the basemap. Use the opacity slider if you need to see through it.
+
+**Tip:** Alignment works best when your reference looks similar to the basemap style — same kind of map, roughly the same scale and orientation. A street plan on a street map is easier than a schematic on a satellite view.
+
+You can lock the overlay when it fits, so the corners do not move while you trace.
+
+### 2. Trace the route
+
+Zoom in until the OpenStreetMap road network has loaded (the routing panel in the sidebar shows when the graph is ready). Then click on the map to build the route.
+
+Two draw modes:
+
+- **Route snapping** — the line follows roads between your clicks.
+- **Freehand drawing** — you sketch a stretch yourself, for example where OSM does not match reality yet.
+
+Press **S** to switch modes while drawing.
+
+Double-click to finish a line. You can drag waypoints to adjust the path, click an endpoint to keep drawing, or remove a point by clicking it. Snapped and freehand stretches are shown as solid and dashed lines.
+
+### 3. Export the geometry
+
+Download GeoJSON — one `LineString` per route segment, with `segment_kind` set to `snapped` or `manual`. Optionally simplify the geometry on export to drop extra points that were only needed for snapping.
+
+## For developers
 
 Requires [Bun](https://bun.sh) (≥ 1.3.14).
-
-Depends on `@osm-editor-kit/*` **alpha** packages from npm (`0.1.0-alpha.0`). Install with Bun; no local street-space-editor clone is required. A `package.json` override pins `@osm-editor-kit/osm-data` so nested `workspace:*` ranges in the first alpha tarballs resolve on npm.
 
 ```bash
 bun install
@@ -19,62 +52,14 @@ bun run dev
 
 Open the URL Vite prints (default `http://127.0.0.1:5173/`). The map viewport syncs to the `?map=zoom/lat/lng` search param.
 
-Other scripts:
+Useful scripts:
 
-- `bun run check` — type-check, lint, format, tests, knip (mutating)
+- `bun run check` — type-check, lint, format, tests
 - `bun run build` — production build to `dist/`
-- `bun run preview:pages` — build and preview the GitHub Pages bundle at `/route-tracer/`
-- `bun run e2e` — Playwright smoke (starts dev server if needed)
+- `bun run preview:pages` — preview the GitHub Pages bundle at `/route-tracer/`
+- `bun run e2e` — Playwright smoke test
 
-E2E setup (once per machine):
-
-```bash
-bunx playwright install chromium
-```
-
-## How to use
-
-1. **Paste or drop a reference image** in the sidebar (or on the map). The image bytes stay in memory only.
-2. **Stretch the overlay** — drag corner handles until the plan lines up with the basemap. Use the opacity slider if needed.
-3. **Lock the overlay** when alignment is good so corner handles do not move while tracing.
-4. **Zoom to level 15 or higher** — OSM highway data and the routing graph load at zoom ≥ 15. Wait until the Routing panel shows the graph is ready.
-5. **Click waypoints on the map** to build snapped segments between connection points. Drag waypoints to adjust snapped stretches.
-6. **Draw-through (manual segments)** — toggle draw-through mode for stretches OSM cannot follow (e.g. a new bridge). Sketch the polyline; adjacent snapped segments reconnect at the endpoints.
-7. **Export** — download GeoJSON from the Route segments panel, or copy the page URL to share alignment and route geometry.
-
-### Shareable vs ephemeral state
-
-| Shareable (URL)              | Ephemeral (lost on refresh)                  |
-| ---------------------------- | -------------------------------------------- |
-| Map viewport (`?map=`)       | Reference image bytes                        |
-| Overlay corners and opacity  | OSM routing graph / coverage cache           |
-| Route segments and waypoints | Transient UI mode (e.g. draw-through active) |
-
-Opening a shared link restores overlay alignment and route geometry. Re-paste or re-drop the reference image to see the plan again.
-
-### Export notes
-
-- Each route segment is exported as its own GeoJSON `LineString` with `segment_kind` (`snapped` | `manual`).
-- **OSM way IDs** on snapped segments (`osm_way_ids`) are deferred — export is geometry-first until a consumer needs way-level references.
-
-## Status
-
-Greenfield bootstrap. Research notes: [`research/`](./research/). Near-future exploration: [vector tiles as routing source](./research/vector-tiles-as-routing-source.md) (vs Overpass).
-
-## GitHub Pages
-
-Published at **https://fixmyberlin.github.io/route-tracer/** when [GitHub Pages](https://github.com/FixMyBerlin/route-tracer/settings/pages) is set to **GitHub Actions** as the source.
-
-The production build uses `base: /route-tracer/` (see `src/shared/site-base.ts`). After each build, `index.html` is copied to `404.html` so direct links and refreshes work as a SPA. `public/.nojekyll` disables Jekyll processing.
-
-Test the Pages bundle locally:
-
-```bash
-bun run preview:pages
-# open http://127.0.0.1:4173/route-tracer/
-```
-
-For Overpass API origin allowlisting, use `https://fixmyberlin.github.io` (no path).
+E2E setup (once per machine): `bunx playwright install chromium`
 
 ## License
 
