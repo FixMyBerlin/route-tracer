@@ -21,11 +21,6 @@ jobs:
       - name: Checkout route-tracer
         uses: actions/checkout@v4
 
-      - name: Checkout street-space-editor
-        run: |
-          mkdir -p ../../OSM
-          git clone --depth 1 https://github.com/osmberlin/street-space-editor.git ../../OSM/street-space-editor
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 

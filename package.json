@@ -30,7 +30,7 @@
     "@osm-editor-kit/osm-map-url": "0.1.0-alpha.0",
     "@osm-editor-kit/osm-maplibre": "0.1.0-alpha.0",
     "@osm-editor-kit/osm-route-snapper": "0.1.0-alpha.0",
-    "@osm-editor-kit/osm-way-chain": "file:../../OSM/street-space-editor/packages/osm-way-chain",
+    "@osm-editor-kit/osm-way-chain": "0.1.0-alpha.2",
     "@tanstack/react-hotkeys": "^0.10.0",
     "@tanstack/react-pacer": "^0.22.1",
     "@tanstack/react-query": "^5.85.5",
