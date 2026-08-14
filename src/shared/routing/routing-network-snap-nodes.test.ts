@@ -1,42 +1,38 @@
-import type { FeatureCollection, LineString } from 'geojson'
 import { describe, expect, it } from 'vitest'
-import { routingNetworkSnapNodes } from '@/shared/routing/routing-network-snap-nodes'
+import { parseSnappableNodesGeoJson } from '@/shared/routing/routing-network-snap-nodes'
 
-function lineCollection(...paths: [number, number][][]): FeatureCollection<LineString> {
-  return {
-    type: 'FeatureCollection',
-    features: paths.map((coordinates) => ({
-      type: 'Feature' as const,
-      properties: {},
-      geometry: { type: 'LineString' as const, coordinates },
-    })),
-  }
-}
+describe('parseSnappableNodesGeoJson', () => {
+  it('keeps Point features from debugSnappableNodes output', () => {
+    const nodes = parseSnappableNodesGeoJson({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [13, 52] },
+        },
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [13, 52],
+              [13.1, 52],
+            ],
+          },
+        },
+      ],
+    })
 
-describe('routingNetworkSnapNodes', () => {
-  it('returns unique edge vertices so shared junctions appear once', () => {
-    const nodes = routingNetworkSnapNodes(
-      lineCollection(
-        [
-          [13, 52],
-          [13.1, 52],
-        ],
-        [
-          [13.1, 52],
-          [13.2, 52],
-        ],
-      ),
-    )
-
-    expect(nodes.features).toHaveLength(3)
-    expect(nodes.features.map((feature) => feature.geometry.coordinates)).toEqual([
-      [13, 52],
-      [13.1, 52],
-      [13.2, 52],
-    ])
+    expect(nodes.features).toHaveLength(1)
+    expect(nodes.features[0]?.geometry.coordinates).toEqual([13, 52])
   })
 
-  it('returns an empty collection when there are no edges', () => {
-    expect(routingNetworkSnapNodes(lineCollection()).features).toEqual([])
+  it('returns an empty collection for invalid input', () => {
+    expect(parseSnappableNodesGeoJson(null).features).toEqual([])
+    expect(
+      parseSnappableNodesGeoJson({ type: 'FeatureCollection', features: [] }).features,
+    ).toEqual([])
   })
 })

@@ -2,8 +2,10 @@ import { Layer, Source } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
 import { NETWORK_HIGHLIGHT_COLORS } from '@/shared/routing/constants'
 import { ROUTE_SNAPPED_LAYER_ID } from '@/shared/routing/route-layer-ids'
-import { useRouteSnapperGraphQuery } from '@/shared/routing/route-snapper-query'
-import { routingNetworkSnapNodes } from '@/shared/routing/routing-network-snap-nodes'
+import {
+  useRouteSnapperGraphQuery,
+  useSnappableNodesQuery,
+} from '@/shared/routing/route-snapper-query'
 
 const OVERPASS_HIGHLIGHT_SOURCE_ID = 'network-highlight-overpass'
 const OVERPASS_HIGHLIGHT_LAYER_ID = 'network-highlight-overpass-line'
@@ -14,13 +16,14 @@ const ROUTING_HIGHLIGHT_NODES_LAYER_ID = 'network-highlight-routing-nodes'
 
 /** Thin overlay on top of Positron; drawn route layers sit above this. */
 const NETWORK_HIGHLIGHT_LINE_WIDTH = 1.5
-const ROUTING_SNAP_NODE_RADIUS_PX = 2.5
+/** Hairline + 1px each side; no stroke so the dots stay subtle. */
+const ROUTING_SNAP_NODE_RADIUS_PX = NETWORK_HIGHLIGHT_LINE_WIDTH / 2 + 1
 
 const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
 
 /**
  * Overpass: sky hairline on raw OSM ways.
- * Routing graph: purple hairline plus small snap-node dots on top of the way
+ * Routing graph: purple hairline plus subtle dots at snappable nodes
  * (fixed pixel size, independent of road class).
  *
  * Inserted below the drawn route (`ROUTE_SNAPPED_LAYER_ID`). Positron is untouched.
@@ -28,15 +31,14 @@ const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
 export function NetworkHighlightLayers() {
   const mode = Route.useSearch({ select: (search) => search.network })
   const graph = useRouteSnapperGraphQuery()
+  const snappableNodes = useSnappableNodesQuery()
 
   const overpassData =
     mode === 'overpass' ? (graph.data?.overpassWays ?? emptyCollection) : emptyCollection
   const routingData =
     mode === 'routing' ? (graph.data?.routingNetwork ?? emptyCollection) : emptyCollection
   const routingNodes =
-    mode === 'routing' && graph.data?.routingNetwork
-      ? routingNetworkSnapNodes(graph.data.routingNetwork)
-      : emptyCollection
+    mode === 'routing' ? (snappableNodes.data ?? emptyCollection) : emptyCollection
 
   return (
     <>
@@ -83,9 +85,6 @@ export function NetworkHighlightLayers() {
           paint={{
             'circle-radius': ROUTING_SNAP_NODE_RADIUS_PX,
             'circle-color': NETWORK_HIGHLIGHT_COLORS.routing,
-            'circle-stroke-color': '#f8fafc',
-            'circle-stroke-width': 0.75,
-            'circle-opacity': 0.95,
           }}
         />
       </Source>
