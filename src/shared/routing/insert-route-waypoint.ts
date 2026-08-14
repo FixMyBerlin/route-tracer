@@ -42,9 +42,23 @@ export function isNearExistingWaypoint(
   lat: number,
   maxMeters = 2,
 ) {
-  return waypoints.some(
-    (waypoint) => haversineMeters(lat, lon, waypoint.lat, waypoint.lon) <= maxMeters,
-  )
+  return indexOfNearestWaypoint(waypoints, lon, lat, maxMeters) !== null
+}
+
+/** Closest waypoint within `maxMeters`, or `null` when none is that close. */
+export function indexOfNearestWaypoint(
+  waypoints: InsertableWaypoint[],
+  lon: number,
+  lat: number,
+  maxMeters: number,
+): number | null {
+  let best: { index: number; dist: number } | null = null
+  for (const [index, waypoint] of waypoints.entries()) {
+    const dist = haversineMeters(lat, lon, waypoint.lat, waypoint.lon)
+    if (dist > maxMeters) continue
+    if (!best || dist < best.dist) best = { index, dist }
+  }
+  return best?.index ?? null
 }
 
 export function insertWaypointAt(
@@ -53,4 +67,8 @@ export function insertWaypointAt(
   waypoint: InsertableWaypoint,
 ): InsertableWaypoint[] {
   return [...waypoints.slice(0, index), waypoint, ...waypoints.slice(index)]
+}
+
+export function removeWaypointAt<T>(waypoints: T[], index: number): T[] {
+  return [...waypoints.slice(0, index), ...waypoints.slice(index + 1)]
 }

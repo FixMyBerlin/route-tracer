@@ -27,6 +27,8 @@ export const ROUTE_SNAPPED_LINE_OFFSET_PX = ROUTE_LINE_WIDTH_PX * 0.8
 export const ROUTE_WAYPOINT_COLORS = {
   edge: '#dc2626',
   mid: '#ea580c',
+  /** Stroke when hovering a point that a click will remove. */
+  removeHover: '#fbbf24',
 } as const
 
 /** Matches route-snapper demo waypoint sizing. */

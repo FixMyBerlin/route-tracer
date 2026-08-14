@@ -4,9 +4,10 @@ import type { RouteTool } from 'route-snapper-ts'
 import { ROUTE_WAYPOINT_RADIUS_PX } from '@/shared/routing/constants'
 import { decorateRouteToolGeoJson } from '@/shared/routing/decorate-route-tool-geojson'
 import {
+  indexOfNearestWaypoint,
   insertIndexAlongSegments,
   insertWaypointAt,
-  isNearExistingWaypoint,
+  removeWaypointAt,
 } from '@/shared/routing/insert-route-waypoint'
 import { mergeAdjacentWaypoints } from '@/shared/routing/merge-route-waypoints'
 import {
@@ -37,6 +38,12 @@ let routeSnapperNetwork: FeatureCollection<LineString> | null = null
  * every drag, so the app has to own this and push it back into WASM.
  */
 let drawMode: RouteDrawMode = 'snapped'
+/**
+ * Snapshots of confirmed waypoints taken before each add or remove. route-snapper's own
+ * undo stack is wiped by `editExisting`, which we use after most clicks.
+ */
+let waypointUndoStack: RouteWaypoint[][] = []
+const MAX_WAYPOINT_UNDO = 50
 
 /** Matches route-snapper-ts hover/click radius. */
 const SNAP_DISTANCE_PIXELS = 30
@@ -44,6 +51,7 @@ const SNAP_DISTANCE_PIXELS = 30
 export function setActiveRouteTool(tool: RouteTool | null) {
   activeRouteTool = tool
   routeFinished = false
+  waypointUndoStack = []
   if (!tool) lastPointerLonLat = null
 }
 
@@ -61,6 +69,7 @@ function decorateForRender(routeTool: RouteTool, geojson: FeatureCollection) {
     routeFinished ? null : lastPointerLonLat,
     routeSnapperNetwork,
     readWaypoints(routeTool),
+    waypointRemoveTarget(routeTool),
   )
 }
 
@@ -75,16 +84,16 @@ function syncRouteToolRender(routeTool: RouteTool) {
     snap_mode?: boolean
     undo_length?: number
   }
+  const decorated = decorateForRender(routeTool, geojson)
   routeTool.routeToolGj.set(geojson)
+  const removing = decorated.features.some((feature) => feature.properties?.will_remove)
   if (typeof geojson.cursor === 'string') {
-    routeTool.map.getCanvas().style.cursor = geojson.cursor
+    routeTool.map.getCanvas().style.cursor = removing ? 'pointer' : geojson.cursor
   }
   if (typeof geojson.snap_mode === 'boolean') {
     routeTool.snapMode.set(geojson.snap_mode)
   }
-  if (typeof geojson.undo_length === 'number') {
-    routeTool.undoLength.set(geojson.undo_length)
-  }
+  routeTool.undoLength.set(waypointUndoStack.length)
 }
 
 function readWasmSnapMode(routeTool: RouteTool): boolean {
@@ -140,6 +149,101 @@ function pixelsInMeters(routeTool: RouteTool, lonLat: [number, number], pixels: 
 
 function snapRadiusMeters(routeTool: RouteTool, lonLat: [number, number]) {
   return pixelsInMeters(routeTool, lonLat, SNAP_DISTANCE_PIXELS)
+}
+
+function waypointHitRadiusMeters(routeTool: RouteTool, lonLat: [number, number]) {
+  return pixelsInMeters(routeTool, lonLat, ROUTE_WAYPOINT_RADIUS_PX + 4)
+}
+
+function snapshotWaypoints(waypoints: RouteWaypoint[]): RouteWaypoint[] {
+  return waypoints.map((waypoint) => ({
+    lon: waypoint.lon,
+    lat: waypoint.lat,
+    snapped: waypoint.snapped,
+  }))
+}
+
+function pushWaypointUndo(waypoints: RouteWaypoint[]) {
+  waypointUndoStack.push(snapshotWaypoints(waypoints))
+  if (waypointUndoStack.length > MAX_WAYPOINT_UNDO) waypointUndoStack.shift()
+}
+
+/** Existing waypoint a click will remove, or `null` when the pointer is adding instead. */
+function waypointRemoveTarget(routeTool: RouteTool): RouteWaypoint | null {
+  const waypoints = readWaypoints(routeTool)
+  if (waypoints.length === 0) return null
+  const removable = routeFinished && waypoints.length >= 2 ? waypoints.slice(1, -1) : waypoints
+  if (removable.length === 0) return null
+
+  const pointer = lastPointerLonLat
+  if (pointer) {
+    const index = indexOfNearestWaypoint(
+      removable,
+      pointer[0],
+      pointer[1],
+      waypointHitRadiusMeters(routeTool, pointer),
+    )
+    if (index !== null) return removable[index] ?? null
+  }
+
+  if (pointer && routeSnapperNetwork && !routeFinished) {
+    const onRoad = nearestPointOnLines(routeSnapperNetwork, pointer[0], pointer[1])
+    if (onRoad) {
+      const index = indexOfNearestWaypoint(removable, onRoad.lon, onRoad.lat, 2)
+      if (index !== null) return removable[index] ?? null
+    }
+  }
+
+  const hover = readHoveredPoint(routeTool)
+  if (!hover || (hover.type !== 'snapped-waypoint' && hover.type !== 'free-waypoint')) {
+    return null
+  }
+  const index = indexOfNearestWaypoint(removable, hover.lon, hover.lat, 2)
+  return index === null ? null : (removable[index] ?? null)
+}
+
+function restoreWaypoints(routeTool: RouteTool, waypoints: RouteWaypoint[], stayFreehand: boolean) {
+  if (waypoints.length === 0) {
+    routeTool.inner.clearState()
+    restoreExtendRoute(routeTool)
+    if (stayFreehand) {
+      forceEnterFreehandMode(routeTool)
+      return
+    }
+    applyDrawModeToWasm(routeTool)
+    applyPointer(routeTool, lastPointerLonLat)
+    syncRouteToolRender(routeTool)
+    return
+  }
+  commitWaypoints(routeTool, waypoints, stayFreehand)
+}
+
+function removeExistingWaypoint(
+  routeTool: RouteTool,
+  waypoints: RouteWaypoint[],
+  lon: number,
+  lat: number,
+  stayFreehand: boolean,
+  maxMeters = 2,
+) {
+  const index = indexOfNearestWaypoint(waypoints, lon, lat, maxMeters)
+  if (index === null) return false
+  pushWaypointUndo(waypoints)
+  restoreWaypoints(routeTool, removeWaypointAt(waypoints, index), stayFreehand)
+  return true
+}
+
+function undoLastWaypointChange() {
+  const routeTool = activeRouteTool
+  if (!routeTool?.active) return
+  const previous = waypointUndoStack.pop()
+  if (previous === undefined) return
+  restoreWaypoints(routeTool, previous, drawMode === 'freehand')
+  if (routeFinished && readWaypoints(routeTool).length < 2) {
+    routeFinished = false
+    restoreExtendRoute(routeTool)
+    syncRouteToolRender(routeTool)
+  }
 }
 
 function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
@@ -268,25 +372,19 @@ function commitWaypoints(routeTool: RouteTool, waypoints: RouteWaypoint[], stayF
 
 function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
   const pointer = lastPointerLonLat
-  const hover = readHoveredPoint(routeTool)
   const waypoints = readWaypoints(routeTool)
   const stayFreehand = drawMode === 'freehand'
 
-  // route-snapper also marks the point it would add next as hovered. Hand the click over
-  // only for a point that is already part of the route, where clicking removes it again.
-  if (
-    hover &&
-    (hover.type === 'snapped-waypoint' || hover.type === 'free-waypoint') &&
-    isNearExistingWaypoint(waypoints, hover.lon, hover.lat) &&
-    pointer &&
-    haversineMeters(pointer[1], pointer[0], hover.lat, hover.lon) <= ROAD_SNAP_RADIUS_METERS
-  ) {
-    originalOnClick()
+  const removeTarget = waypointRemoveTarget(routeTool)
+  if (removeTarget) {
+    removeExistingWaypoint(routeTool, waypoints, removeTarget.lon, removeTarget.lat, stayFreehand)
     return
   }
 
   if (!pointer) {
+    pushWaypointUndo(waypoints)
     originalOnClick()
+    syncRouteToolRender(routeTool)
     return
   }
 
@@ -315,10 +413,10 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
         snapped = true
       }
     }
-    if (isNearExistingWaypoint(waypoints, placeLon, placeLat)) {
-      originalOnClick()
+    if (removeExistingWaypoint(routeTool, waypoints, placeLon, placeLat, stayFreehand)) {
       return
     }
+    pushWaypointUndo(waypoints)
     commitWaypoints(
       routeTool,
       insertWaypointAt(waypoints, onDrawnRoute.insertIndex, {
@@ -333,10 +431,16 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
 
   if (stayFreehand) {
     // A freehand click within 5 m of a road sticks to it, so snapping can pick up there later.
-    if (!onRoad || isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
+    if (!onRoad) {
+      pushWaypointUndo(waypoints)
       originalOnClick()
+      syncRouteToolRender(routeTool)
       return
     }
+    if (removeExistingWaypoint(routeTool, waypoints, onRoad.lon, onRoad.lat, stayFreehand)) {
+      return
+    }
+    pushWaypointUndo(waypoints)
     commitWaypoints(
       routeTool,
       [...waypoints, { lon: onRoad.lon, lat: onRoad.lat, snapped: false }],
@@ -347,11 +451,11 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
 
   // Snapped clicks only land on the network.
   if (!onRoad) return
-  if (isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
-    originalOnClick()
+  if (removeExistingWaypoint(routeTool, waypoints, onRoad.lon, onRoad.lat, stayFreehand)) {
     return
   }
 
+  pushWaypointUndo(waypoints)
   const anchored = snapEndAnchor(routeTool, waypoints)
   if (anchored.change !== 'none') {
     routeTool.inner.editExisting(anchored.waypoints)
@@ -375,6 +479,15 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   const originalSnapModeSet = routeTool.snapMode.set.bind(routeTool.snapMode)
   routeTool.snapMode.set = () => {
     originalSnapModeSet(drawMode === 'snapped')
+  }
+
+  const originalUndoLengthSet = routeTool.undoLength.set.bind(routeTool.undoLength)
+  routeTool.undoLength.set = () => {
+    originalUndoLengthSet(waypointUndoStack.length)
+  }
+
+  routeTool.undo = () => {
+    undoLastWaypointChange()
   }
 
   const originalGjSet = routeTool.routeToolGj.set.bind(routeTool.routeToolGj)
@@ -415,11 +528,8 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.onMouseMove = (event: MapMouseEvent) => {
     lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
     originalMouseMove(event)
-    // A finished route has no snap preview to follow the cursor; route-snapper's own
-    // redraw already switches the cursor over the points that stay draggable.
-    if (!routeTool.active || routeFinished || !routeSnapperNetwork) return
-    const onRoad = nearestPointOnLines(routeSnapperNetwork, event.lngLat.lng, event.lngLat.lat)
-    if (onRoad) syncRouteToolRender(routeTool)
+    if (!routeTool.active) return
+    syncRouteToolRender(routeTool)
   }
   routeTool.map.on('mousemove', routeTool.onMouseMove)
 
@@ -512,6 +622,16 @@ export function finishActiveRoute() {
  */
 function handleFinishedClick(routeTool: RouteTool, originalOnClick: () => void) {
   if (tryResumeFromEndpoint(routeTool)) return
+  const waypoints = readWaypoints(routeTool)
+  const target = waypointRemoveTarget(routeTool)
+  if (target) {
+    removeExistingWaypoint(routeTool, waypoints, target.lon, target.lat, drawMode === 'freehand')
+    if (readWaypoints(routeTool).length >= 2) return
+    routeFinished = false
+    restoreExtendRoute(routeTool)
+    syncRouteToolRender(routeTool)
+    return
+  }
   originalOnClick()
   // One point left is a route being drawn again, not a finished one.
   if (readWaypoints(routeTool).length >= 2) return
@@ -551,11 +671,12 @@ function resumeActiveRoute(routeTool: RouteTool, waypoints: RouteWaypoint[]) {
 }
 
 export function undoRouteEdit() {
-  activeRouteTool?.undo()
+  undoLastWaypointChange()
 }
 
 export function clearActiveRoute() {
   routeFinished = false
+  waypointUndoStack = []
   if (!activeRouteTool) {
     clearRouteState()
     return

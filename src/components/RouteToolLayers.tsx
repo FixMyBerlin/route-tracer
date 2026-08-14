@@ -70,6 +70,8 @@ export function RouteToolLayers() {
         paint={{
           'circle-radius': [
             'case',
+            ['has', 'will_remove'],
+            ROUTE_WAYPOINT_RADIUS_PX + 4,
             ['has', 'hovered'],
             ROUTE_WAYPOINT_RADIUS_PX + 2,
             ROUTE_WAYPOINT_RADIUS_PX,
@@ -81,9 +83,14 @@ export function RouteToolLayers() {
             ROUTE_WAYPOINT_COLORS.edge,
             ROUTE_WAYPOINT_COLORS.mid,
           ],
-          'circle-stroke-color': '#f8fafc',
-          'circle-stroke-width': 2,
-          'circle-opacity': ['case', ['has', 'hovered'], 0.55, 1],
+          'circle-stroke-color': [
+            'case',
+            ['has', 'will_remove'],
+            ROUTE_WAYPOINT_COLORS.removeHover,
+            '#f8fafc',
+          ],
+          'circle-stroke-width': ['case', ['has', 'will_remove'], 3, 2],
+          'circle-opacity': ['case', ['has', 'will_remove'], 1, ['has', 'hovered'], 0.55, 1],
         }}
       />
       <Layer
@@ -103,7 +110,7 @@ export function RouteToolLayers() {
         }}
         paint={{
           'text-color': '#ffffff',
-          'text-opacity': ['case', ['has', 'hovered'], 0.55, 1],
+          'text-opacity': ['case', ['has', 'will_remove'], 1, ['has', 'hovered'], 0.55, 1],
         }}
       />
     </Source>

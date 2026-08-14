@@ -173,4 +173,68 @@ describe('decorateRouteToolGeoJson', () => {
     expect(preview?.geometry.type).toBe('Point')
     expect(preview?.properties?.click_index).toBeUndefined()
   })
+
+  it('marks a hovered existing waypoint as removable and skips the snap preview', () => {
+    const network: FeatureCollection<LineString> = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [13, 52],
+              [13.001, 52],
+            ],
+          },
+        },
+      ],
+    }
+    const geojson: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [13, 52] },
+          properties: { type: 'snapped-waypoint' },
+        },
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [13.001, 52] },
+          properties: { type: 'snapped-waypoint', hovered: true },
+        },
+      ],
+    }
+
+    const decorated = decorateRouteToolGeoJson(
+      geojson,
+      [13, 52],
+      network,
+      [
+        { lon: 13, lat: 52 },
+        { lon: 13.001, lat: 52 },
+      ],
+      { lon: 13, lat: 52 },
+    )
+
+    const start = decorated.features.find(
+      (feature) =>
+        feature.geometry.type === 'Point' &&
+        feature.geometry.coordinates[0] === 13 &&
+        feature.geometry.coordinates[1] === 52,
+    )
+    const other = decorated.features.find(
+      (feature) =>
+        feature.geometry.type === 'Point' &&
+        feature.geometry.coordinates[0] === 13.001 &&
+        feature.geometry.coordinates[1] === 52,
+    )
+    expect(start?.properties?.will_remove).toBe(true)
+    expect(start?.properties?.hovered).toBe(true)
+    expect(other?.properties?.hovered).toBeUndefined()
+    expect(decorated.features.some((feature) => feature.properties?.type === 'snap-preview')).toBe(
+      false,
+    )
+  })
 })

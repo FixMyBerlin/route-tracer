@@ -22,10 +22,14 @@ export function decorateRouteToolGeoJson(
   pointer: [number, number] | null,
   network: FeatureCollection<LineString> | null,
   waypoints: ClickWaypoint[] = [],
+  removeTarget: ClickWaypoint | null = null,
 ): FeatureCollection {
-  const onRoad = pointer && network ? nearestPointOnLines(network, pointer[0], pointer[1]) : null
+  const onRoad =
+    pointer && network && !removeTarget
+      ? nearestPointOnLines(network, pointer[0], pointer[1])
+      : null
 
-  const features = markPreviewLines(geojson.features, waypoints).map((feature) => {
+  const tagged = markPreviewLines(geojson.features, waypoints).map((feature) => {
     if (feature.geometry?.type !== 'Point') return feature
     const [lng, lat] = feature.geometry.coordinates
     if (typeof lng !== 'number' || typeof lat !== 'number') return feature
@@ -36,6 +40,7 @@ export function decorateRouteToolGeoJson(
     const kind = type === 'snapped-waypoint' && isOriginalOsmNode(lng, lat) ? 'edge' : 'mid'
     return { ...feature, properties: { ...feature.properties, kind } }
   })
+  const features = applyRemoveHover(tagged, removeTarget)
   const numbered = assignWaypointClickIndices(features, waypoints)
 
   if (onRoad) {
@@ -55,6 +60,30 @@ export function decorateRouteToolGeoJson(
   }
 
   return { ...geojson, features: numbered }
+}
+
+function applyRemoveHover(features: Feature[], removeTarget: ClickWaypoint | null): Feature[] {
+  if (!removeTarget) return features
+
+  return features.map((feature) => {
+    if (feature.geometry?.type !== 'Point') return feature
+    const type = String(feature.properties?.type ?? '')
+    if (!WAYPOINT_TYPES.has(type) && type !== 'snap-preview') return feature
+    const [lng, lat] = feature.geometry.coordinates
+    if (typeof lng !== 'number' || typeof lat !== 'number') return feature
+
+    if (samePlace([lng, lat], removeTarget)) {
+      return {
+        ...feature,
+        properties: { ...feature.properties, hovered: true, will_remove: true },
+      }
+    }
+
+    if (!feature.properties?.hovered) return feature
+    const rest = { ...feature.properties }
+    delete rest.hovered
+    return { ...feature, properties: rest }
+  })
 }
 
 function samePlace(position: Position | undefined, waypoint: ClickWaypoint) {
