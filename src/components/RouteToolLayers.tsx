@@ -48,7 +48,7 @@ export function RouteToolLayers() {
         paint={{
           'line-color': ROUTE_SEGMENT_COLORS.freehand,
           'line-width': 5,
-          'line-dasharray': [2, 1.5],
+          'line-dasharray': [0.5, 1.5],
         }}
       />
       <Layer

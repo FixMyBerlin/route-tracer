@@ -98,6 +98,7 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
         <MapGeocodingControl />
         {tracing ? <NetworkHighlightLayers /> : null}
         {referenceImageLayers}
+        {/* Drawn route sits above the network hairline; both sit above Positron. */}
         <RouteToolLayers />
         {tracing ? <CoverageDebugOverlay /> : null}
         {tracing ? <RouteSnapperHost /> : null}

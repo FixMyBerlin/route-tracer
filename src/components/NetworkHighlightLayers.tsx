@@ -2,34 +2,28 @@ import { Layer, Source } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
 import { NETWORK_HIGHLIGHT_COLORS } from '@/shared/routing/constants'
 import { useRouteSnapperGraphQuery } from '@/shared/routing/route-snapper-query'
-
-/** First OpenFreeMap Positron road casing — network highlights draw underneath streets. */
-const STREET_NETWORK_BEFORE_ID = 'tunnel_motorway_casing'
+import { routingNetworkSnapNodes } from '@/shared/routing/routing-network-snap-nodes'
 
 const OVERPASS_HIGHLIGHT_SOURCE_ID = 'network-highlight-overpass'
 const OVERPASS_HIGHLIGHT_LAYER_ID = 'network-highlight-overpass-line'
 const ROUTING_HIGHLIGHT_SOURCE_ID = 'network-highlight-routing'
 const ROUTING_HIGHLIGHT_LAYER_ID = 'network-highlight-routing-line'
+const ROUTING_HIGHLIGHT_NODES_SOURCE_ID = 'network-highlight-routing-nodes'
+const ROUTING_HIGHLIGHT_NODES_LAYER_ID = 'network-highlight-routing-nodes'
 
-/**
- * Solid casing under basemap roads: ~highway_minor width + 2px each side.
- * @see openfreemap-positron highway_minor line-width
- */
-const NETWORK_HIGHLIGHT_LINE_WIDTH = [
-  'interpolate',
-  ['exponential', 1.55],
-  ['zoom'],
-  13,
-  5.8,
-  20,
-  24,
-] as ['interpolate', ['exponential', number], ['zoom'], number, number, number, number]
+/** Thin overlay on top of Positron; drawn route layers sit above this. */
+const NETWORK_HIGHLIGHT_LINE_WIDTH = 1.5
+const ROUTING_SNAP_NODE_RADIUS_PX = 2.5
 
 const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
 
 /**
- * Overpass: thick sky casing under basemap roads (raw OSM ways).
- * Routing graph: same solid casing in purple (intersection-split edges).
+ * Overpass: sky hairline on raw OSM ways.
+ * Routing graph: purple hairline plus small snap-node dots on top of the way
+ * (fixed pixel size, independent of road class).
+ *
+ * No `beforeId` — Positron roads stay as-is. `RouteToolLayers` mounts later so the
+ * snapped/freehand route paints on top of this overlay.
  */
 export function NetworkHighlightLayers() {
   const mode = Route.useSearch({ select: (search) => search.network })
@@ -39,6 +33,10 @@ export function NetworkHighlightLayers() {
     mode === 'overpass' ? (graph.data?.overpassWays ?? emptyCollection) : emptyCollection
   const routingData =
     mode === 'routing' ? (graph.data?.routingNetwork ?? emptyCollection) : emptyCollection
+  const routingNodes =
+    mode === 'routing' && graph.data?.routingNetwork
+      ? routingNetworkSnapNodes(graph.data.routingNetwork)
+      : emptyCollection
 
   return (
     <>
@@ -46,7 +44,6 @@ export function NetworkHighlightLayers() {
         <Layer
           id={OVERPASS_HIGHLIGHT_LAYER_ID}
           type="line"
-          beforeId={STREET_NETWORK_BEFORE_ID}
           layout={{
             visibility: mode === 'overpass' ? 'visible' : 'none',
             'line-cap': 'round',
@@ -55,7 +52,6 @@ export function NetworkHighlightLayers() {
           paint={{
             'line-color': NETWORK_HIGHLIGHT_COLORS.overpass,
             'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
-            'line-opacity': 0.85,
           }}
         />
       </Source>
@@ -63,7 +59,6 @@ export function NetworkHighlightLayers() {
         <Layer
           id={ROUTING_HIGHLIGHT_LAYER_ID}
           type="line"
-          beforeId={STREET_NETWORK_BEFORE_ID}
           layout={{
             visibility: mode === 'routing' ? 'visible' : 'none',
             'line-cap': 'round',
@@ -72,7 +67,22 @@ export function NetworkHighlightLayers() {
           paint={{
             'line-color': NETWORK_HIGHLIGHT_COLORS.routing,
             'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
-            'line-opacity': 0.85,
+          }}
+        />
+      </Source>
+      <Source id={ROUTING_HIGHLIGHT_NODES_SOURCE_ID} type="geojson" data={routingNodes}>
+        <Layer
+          id={ROUTING_HIGHLIGHT_NODES_LAYER_ID}
+          type="circle"
+          layout={{
+            visibility: mode === 'routing' ? 'visible' : 'none',
+          }}
+          paint={{
+            'circle-radius': ROUTING_SNAP_NODE_RADIUS_PX,
+            'circle-color': NETWORK_HIGHLIGHT_COLORS.routing,
+            'circle-stroke-color': '#f8fafc',
+            'circle-stroke-width': 0.75,
+            'circle-opacity': 0.95,
           }}
         />
       </Source>

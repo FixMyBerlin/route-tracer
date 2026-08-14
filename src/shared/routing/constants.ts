@@ -4,7 +4,7 @@ export const viewMinZoom = 15
 /** Debounce map moves before triggering Overpass coverage fetches. */
 export const coverageFetchDebounceMs = 400
 
-/** Overpass casing (sky) vs routing-graph casing (purple). */
+/** Overpass hairline (sky) vs routing-graph hairline (purple). */
 export const NETWORK_HIGHLIGHT_COLORS = {
   overpass: '#38bdf8',
   routing: '#7c3aed',

@@ -1,14 +1,33 @@
-import type { FeatureCollection, Point } from 'geojson'
+import type { FeatureCollection } from 'geojson'
 import type { MapMouseEvent } from 'maplibre-gl'
 import type { RouteTool } from 'route-snapper-ts'
-import { clearRouteState } from '@/shared/routing/route-store'
+import { clearRouteState, getRouteSnapMode } from '@/shared/routing/route-store'
 
 let activeRouteTool: RouteTool | null = null
+/** Last map cursor position in lon/lat — used so S updates the active line immediately. */
+let lastPointerLonLat: [number, number] | null = null
 
 export type RouteDrawMode = 'snapped' | 'freehand'
 
+type RouteWaypoint = { lon: number; lat: number; snapped: boolean }
+
+/** Convert a freehand end to a graph node when S re-enables snapping. */
+const SNAP_CONVERT_METERS = 40
+
 export function setActiveRouteTool(tool: RouteTool | null) {
   activeRouteTool = tool
+  if (!tool) lastPointerLonLat = null
+}
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180
+  const earthRadiusMeters = 6_371_000
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
 }
 
 function syncRouteToolRender(routeTool: RouteTool) {
@@ -34,80 +53,131 @@ function readWasmSnapMode(routeTool: RouteTool): boolean {
   return geojson.snap_mode === true
 }
 
-/** Last confirmed waypoint from the live tool GeoJSON (works mid-draw). */
-function lastWaypointLonLat(routeTool: RouteTool): [number, number] | null {
+/** Confirmed waypoints from the live tool (works mid-draw). */
+function readWaypoints(routeTool: RouteTool): RouteWaypoint[] {
+  const raw = routeTool.inner.toFinalFeature()
+  if (raw) {
+    const feature = JSON.parse(raw) as {
+      properties?: { waypoints?: RouteWaypoint[] }
+    }
+    if (Array.isArray(feature.properties?.waypoints) && feature.properties.waypoints.length > 0) {
+      return feature.properties.waypoints
+    }
+  }
+
   const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection
-  let last: [number, number] | null = null
+  const confirmed: RouteWaypoint[] = []
+  const hovered: RouteWaypoint[] = []
   for (const feature of geojson.features) {
     if (feature.geometry?.type !== 'Point') continue
     const type = feature.properties?.type
     if (type !== 'snapped-waypoint' && type !== 'free-waypoint') continue
     const [lng, lat] = feature.geometry.coordinates
-    if (typeof lng === 'number' && typeof lat === 'number') {
-      last = [lng, lat]
-    }
-  }
-  return last
-}
-
-function nearestSnappableNode(
-  routeTool: RouteTool,
-  near: [number, number] | null,
-): [number, number] | null {
-  const collection = JSON.parse(routeTool.inner.debugSnappableNodes()) as FeatureCollection<Point>
-  const features = collection.features
-  if (features.length === 0) return null
-
-  if (!near) {
-    const coords = features[0]?.geometry?.coordinates
-    const lng = coords?.[0]
-    const lat = coords?.[1]
-    return typeof lng === 'number' && typeof lat === 'number' ? [lng, lat] : null
-  }
-
-  let best: [number, number] | null = null
-  let bestDist = Number.POSITIVE_INFINITY
-  for (const feature of features) {
-    const coords = feature.geometry?.coordinates
-    const lng = coords?.[0]
-    const lat = coords?.[1]
     if (typeof lng !== 'number' || typeof lat !== 'number') continue
-    const dist = (lng - near[0]) ** 2 + (lat - near[1]) ** 2
-    if (dist < bestDist) {
-      bestDist = dist
-      best = [lng, lat]
-    }
+    const waypoint = { lon: lng, lat, snapped: type === 'snapped-waypoint' }
+    if (feature.properties?.hovered) hovered.push(waypoint)
+    else confirmed.push(waypoint)
   }
-  return best
+  return confirmed.length > 0 ? confirmed : hovered
 }
 
-/**
- * route-snapper's toggleSnapMode may fail when leaving freehand: WASM only
- * enters snap if mouseover_node succeeds at the current Freehand cursor.
- * With extend_route, that cursor is often nowhere near a graph node.
- */
-function prepareForSnapToggle(routeTool: RouteTool) {
-  const node = nearestSnappableNode(routeTool, lastWaypointLonLat(routeTool))
-  if (!node) return
-  routeTool.inner.onMouseMove(node[0], node[1], 50)
+function lastWaypointLonLat(routeTool: RouteTool): [number, number] | null {
+  const last = readWaypoints(routeTool).at(-1)
+  return last ? [last.lon, last.lat] : null
 }
 
-/**
- * Route-snapper registers `s` / Enter on `keypress` and finishes on double-click.
- * We own mode switching via TanStack Hotkeys and keep the tool in continuous edit
- * (no Enter / double-click finish — that wiped WASM state mid-draw).
- */
-export function configureRouteToolInteractions(routeTool: RouteTool) {
+function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
+  if (!lonLat) return
+  const map = routeTool.map
+  const point = map.project({ lng: lonLat[0], lat: lonLat[1] })
+  const circleRadiusMeters = map.unproject(point).distanceTo(map.unproject([point.x - 30, point.y]))
+  routeTool.inner.onMouseMove(lonLat[0], lonLat[1], circleRadiusMeters)
+}
+
+function restoreExtendRoute(routeTool: RouteTool) {
   routeTool.setRouteConfig({
     avoid_doubling_back: false,
     extend_route: true,
   })
+}
+
+function nearestSnappableNode(routeTool: RouteTool, lon: number, lat: number) {
+  try {
+    const geojson = JSON.parse(routeTool.inner.debugSnappableNodes()) as FeatureCollection
+    let best: { lon: number; lat: number; dist: number } | null = null
+    for (const feature of geojson.features) {
+      if (feature.geometry?.type !== 'Point') continue
+      const [lng, nodeLat] = feature.geometry.coordinates
+      if (typeof lng !== 'number' || typeof nodeLat !== 'number') continue
+      const dist = haversineMeters(lat, lon, nodeLat, lng)
+      if (!best || dist < best.dist) best = { lon: lng, lat: nodeLat, dist }
+    }
+    return best
+  } catch {
+    return null
+  }
+}
+
+/**
+ * WASM only pathfinds between consecutive snapped waypoints. If the last click was
+ * freehand but landed on the network, mark it snapped so the current line can follow roads.
+ */
+function convertLastFreeIfOnNetwork(routeTool: RouteTool) {
+  const waypoints = readWaypoints(routeTool)
+  const last = waypoints.at(-1)
+  if (!last || last.snapped) return
+
+  const nearest = nearestSnappableNode(routeTool, last.lon, last.lat)
+  if (!nearest || nearest.dist > SNAP_CONVERT_METERS) return
+
+  const next = waypoints.map((waypoint, index) =>
+    index === waypoints.length - 1
+      ? { lon: nearest.lon, lat: nearest.lat, snapped: true }
+      : waypoint,
+  )
+  routeTool.inner.editExisting(next)
+  restoreExtendRoute(routeTool)
+}
+
+function forceEnterSnapMode(routeTool: RouteTool) {
+  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+  if (!readWasmSnapMode(routeTool)) {
+    routeTool.toggleSnapMode()
+  }
+  if (!readWasmSnapMode(routeTool)) {
+    applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+    routeTool.toggleSnapMode()
+  }
+
+  convertLastFreeIfOnNetwork(routeTool)
+  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+  syncRouteToolRender(routeTool)
+}
+
+function forceEnterFreehandMode(routeTool: RouteTool) {
+  if (readWasmSnapMode(routeTool)) {
+    routeTool.toggleSnapMode()
+  }
+  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+  syncRouteToolRender(routeTool)
+}
+
+/**
+ * Route-snapper registers `s` / Enter on `keypress` and finishes on double-click.
+ * We own mode switching via TanStack Hotkeys and keep the tool in continuous edit.
+ */
+export function configureRouteToolInteractions(routeTool: RouteTool) {
+  restoreExtendRoute(routeTool)
 
   document.removeEventListener('keypress', routeTool.onKeyPress)
   const originalKeyPress = routeTool.onKeyPress.bind(routeTool)
   routeTool.onKeyPress = (event: KeyboardEvent) => {
     if (event.key === 's' || event.key === 'S') return
-    if (event.key === 'Enter') return
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      finishActiveRoute()
+      return
+    }
     originalKeyPress(event)
   }
   document.addEventListener('keypress', routeTool.onKeyPress)
@@ -115,41 +185,80 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.map.off('dblclick', routeTool.onDoubleClick)
   routeTool.onDoubleClick = (event: MapMouseEvent) => {
     if (!routeTool.active) return
-    // Default tool finishes (and clears) on dblclick. Keep editing instead.
     event.preventDefault()
+    finishActiveRoute()
   }
+
+  const originalMouseMove = routeTool.onMouseMove.bind(routeTool)
+  routeTool.map.off('mousemove', routeTool.onMouseMove)
+  routeTool.onMouseMove = (event: MapMouseEvent) => {
+    lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
+    originalMouseMove(event)
+  }
+  routeTool.map.on('mousemove', routeTool.onMouseMove)
 }
 
 export function toggleDrawThroughMode() {
   const routeTool = activeRouteTool
   if (!routeTool?.active) return
-  setRouteDrawMode(readWasmSnapMode(routeTool) ? 'freehand' : 'snapped')
+
+  const uiSnap = getRouteSnapMode()
+  const lastIsFree = readWaypoints(routeTool).at(-1)?.snapped === false
+  const nextMode: RouteDrawMode = uiSnap && lastIsFree ? 'snapped' : uiSnap ? 'freehand' : 'snapped'
+
+  if (uiSnap && lastIsFree) {
+    setRouteDrawMode('snapped')
+    return
+  }
+  setRouteDrawMode(nextMode)
 }
 
-/** Set draw mode explicitly; no-ops when already in that mode. */
 export function setRouteDrawMode(mode: RouteDrawMode) {
   const routeTool = activeRouteTool
   if (!routeTool?.active) return
-
-  const wantSnap = mode === 'snapped'
-  if (readWasmSnapMode(routeTool) === wantSnap) {
-    syncRouteToolRender(routeTool)
+  if (mode === 'snapped') {
+    forceEnterSnapMode(routeTool)
     return
   }
+  forceEnterFreehandMode(routeTool)
+}
 
-  if (wantSnap) {
-    prepareForSnapToggle(routeTool)
+function stripHoverPreview(geojson: FeatureCollection): FeatureCollection {
+  const hoveredEnds = new Set<string>()
+  for (const feature of geojson.features) {
+    if (feature.geometry?.type !== 'Point') continue
+    if (!feature.properties?.hovered) continue
+    const [lng, lat] = feature.geometry.coordinates
+    if (typeof lng === 'number' && typeof lat === 'number') {
+      hoveredEnds.add(`${lng},${lat}`)
+    }
   }
-
-  routeTool.toggleSnapMode()
-
-  // Retry once if WASM silently rolled snap_mode back.
-  if (wantSnap && !readWasmSnapMode(routeTool)) {
-    prepareForSnapToggle(routeTool)
-    routeTool.toggleSnapMode()
+  return {
+    type: 'FeatureCollection',
+    features: geojson.features.filter((feature) => {
+      if (feature.properties?.hovered) return false
+      if (feature.geometry?.type !== 'LineString') return true
+      const end = feature.geometry.coordinates.at(-1)
+      if (!end) return true
+      return !hoveredEnds.has(`${end[0]},${end[1]}`)
+    }),
   }
+}
 
-  syncRouteToolRender(routeTool)
+/** Confirm the route and leave drawing mode. Geometry stays on the map. */
+export function finishActiveRoute() {
+  const routeTool = activeRouteTool
+  if (!routeTool?.active) return
+  const confirmed = stripHoverPreview(
+    JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection,
+  )
+  routeTool.active = false
+  routeTool.inner.clearState()
+  routeTool.routeToolGj.set(confirmed)
+  routeTool.undoLength.set(0)
+  routeTool.map.getCanvas().style.cursor = ''
+  routeTool.map.boxZoom.enable()
+  routeTool.map.doubleClickZoom.enable()
 }
 
 export function undoRouteEdit() {

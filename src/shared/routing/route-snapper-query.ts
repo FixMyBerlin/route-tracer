@@ -1,5 +1,7 @@
 import { emptyParsedOsmData } from '@osm-editor-kit/osm-data'
 import { countRoadWays, createRouteSnapperGraphApi } from '@osm-editor-kit/osm-route-snapper'
+import { useMemo } from 'react'
+import { densifyParsedOsmForSnapping } from '@/shared/routing/densify-osm-for-snapping'
 import {
   emptyOsmCoverageData,
   osmCoverageSessionKey,
@@ -7,11 +9,12 @@ import {
 } from '@/shared/routing/osm-coverage-query'
 
 function useCoverageGraph() {
-  return useOsmCoverageQuery().data?.graph ?? emptyParsedOsmData()
+  const graph = useOsmCoverageQuery().data?.graph ?? emptyParsedOsmData()
+  return useMemo(() => densifyParsedOsmForSnapping(graph), [graph])
 }
 
 const routeSnapperGraphApi = createRouteSnapperGraphApi({
-  getGraphKey: () => ['route-tracer', 'route-snapper-graph'] as const,
+  getGraphKey: () => ['route-tracer', 'route-snapper-graph', 'densify-v2'] as const,
   useCoverageGraph,
 })
 

@@ -126,54 +126,69 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
   }
 
   return (
-    <section className="border-b border-slate-800 py-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium text-white">Network</h2>
-          {status ? <p className="mt-2 text-sm leading-tight text-slate-400">{status}</p> : null}
+    <>
+      <section className="border-b border-slate-800 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-medium text-white">Network</h2>
+            {status ? <p className="mt-2 text-sm leading-tight text-slate-400">{status}</p> : null}
+          </div>
+          {(tone === 'loading' || graphBuilding) && (
+            <span
+              aria-hidden
+              className="mt-1 size-4 shrink-0 animate-spin rounded-full border-2 border-slate-600 border-t-sky-400"
+            />
+          )}
         </div>
-        {(tone === 'loading' || graphBuilding) && (
-          <span
-            aria-hidden
-            className="mt-1 size-4 shrink-0 animate-spin rounded-full border-2 border-slate-600 border-t-sky-400"
-          />
-        )}
-      </div>
 
-      <fieldset className="mt-4">
-        <legend className="sr-only">Network highlight style</legend>
-        <div className="space-y-2" role="radiogroup" aria-label="Network highlight style">
-          {highlightOptions.map((option) => (
-            <label
-              key={option.value}
-              className="flex cursor-pointer items-center gap-2 text-sm text-slate-400"
-            >
-              <input
-                type="radio"
-                name="network-highlight"
-                className="border-slate-700 bg-slate-900 text-sky-500"
-                checked={network === option.value}
-                onChange={() => updateSearch({ network: option.value })}
-              />
-              {option.swatch ? (
-                <span
-                  aria-hidden
-                  className="inline-block h-1 w-4 shrink-0 rounded-full"
-                  style={{ backgroundColor: option.swatch }}
+        <fieldset className="mt-4">
+          <legend className="sr-only">Network highlight style</legend>
+          <div className="space-y-2" role="radiogroup" aria-label="Network highlight style">
+            {highlightOptions.map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-center gap-2 text-sm text-slate-400"
+              >
+                <input
+                  type="radio"
+                  name="network-highlight"
+                  className="border-slate-700 bg-slate-900 text-sky-500"
+                  checked={network === option.value}
+                  onChange={() => updateSearch({ network: option.value })}
                 />
-              ) : (
-                <span
-                  aria-hidden
-                  className="inline-block h-1 w-4 shrink-0 rounded-full bg-slate-700"
-                />
-              )}
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                {option.label}
-                {option.value === 'routing' && graphReady ? (
-                  <>
-                    <span aria-hidden className="text-slate-400">
-                      ·
-                    </span>
+                {option.value === 'routing' && option.swatch ? (
+                  <span
+                    aria-hidden
+                    className="inline-flex w-4 shrink-0 items-center justify-between"
+                  >
+                    <span
+                      className="size-1 rounded-full"
+                      style={{ backgroundColor: option.swatch }}
+                    />
+                    <span
+                      className="size-1 rounded-full"
+                      style={{ backgroundColor: option.swatch }}
+                    />
+                    <span
+                      className="size-1 rounded-full"
+                      style={{ backgroundColor: option.swatch }}
+                    />
+                  </span>
+                ) : option.swatch ? (
+                  <span
+                    aria-hidden
+                    className="inline-block h-1 w-4 shrink-0 rounded-full"
+                    style={{ backgroundColor: option.swatch }}
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="inline-block h-1 w-4 shrink-0 rounded-full bg-slate-700"
+                  />
+                )}
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  {option.label}
+                  {option.value === 'routing' && graphReady ? (
                     <span className="inline-flex items-center gap-0.5 text-slate-400">
                       <svg aria-hidden viewBox="0 0 16 16" className="size-3 shrink-0" fill="none">
                         <path
@@ -186,97 +201,99 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
                       </svg>
                       ready
                     </span>
-                  </>
+                  ) : null}
+                </span>
+                {option.value === 'overpass' ? (
+                  <span className="shrink-0 text-xs text-slate-400">
+                    {formatCount(wayCount)} {wayCount === 1 ? 'way' : 'ways'}
+                  </span>
                 ) : null}
-              </span>
-              {option.value === 'overpass' ? (
-                <span className="shrink-0 text-xs text-slate-400">
-                  {formatCount(wayCount)} {wayCount === 1 ? 'way' : 'ways'}
-                </span>
-              ) : null}
-              {option.value === 'routing' ? (
-                <span className="shrink-0 text-xs text-slate-400">
-                  {formatCount(edgeCount)} {edgeCount === 1 ? 'edge' : 'edges'}
-                </span>
-              ) : null}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+                {option.value === 'routing' ? (
+                  <span className="shrink-0 text-xs text-slate-400">
+                    {formatCount(edgeCount)} {edgeCount === 1 ? 'edge' : 'edges'}
+                  </span>
+                ) : null}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </section>
 
-      <details className="group mt-5">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
-          <svg
-            aria-hidden
-            viewBox="0 0 16 16"
-            className="size-3 shrink-0 text-slate-400 transition group-open:rotate-90"
-            fill="none"
-          >
-            <path
-              d="M6 4l5 4-5 4"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <h2 className="min-w-0 flex-1 text-sm font-medium text-white">OSM Data</h2>
-          {preferFresh ? (
-            <span className="shrink-0 text-xs text-slate-400">cache off</span>
-          ) : ageLabel ? (
-            <span
-              className={cn('shrink-0 text-xs', cacheStale ? 'text-amber-400' : 'text-slate-400')}
+      <section className="border-b border-slate-800 py-5">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="size-3 shrink-0 text-white transition group-open:rotate-90"
+              fill="none"
             >
-              from ~{ageLabel}
-            </span>
-          ) : null}
-        </summary>
-        <div className="mt-3 space-y-2">
-          {preferFresh ? (
-            <p className="text-sm leading-tight text-slate-400">
-              Cache is off; OSM is fetched fresh.
-            </p>
-          ) : cacheAgeDistance ? (
-            <p className="text-sm leading-tight text-slate-400">
-              OSM data is cached locally and {cacheAgeDistance} old.
-            </p>
-          ) : (
-            <p className="text-sm leading-tight text-slate-400">
-              OSM data is cached locally after the first load.
-            </p>
-          )}
-          <button
-            type="button"
-            className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-400 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={zoom < viewMinZoom || coverageBusy || !mainMap}
-            onClick={() => {
-              void reloadViewport({ force: true, clearPersistedOnForce: true })
-            }}
-          >
-            Reload OSM for this view
-          </button>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
-            <input
-              type="checkbox"
-              className="rounded border-slate-700 bg-slate-900 text-sky-500"
-              checked={preferFresh}
-              onChange={(event) => {
-                void onPreferFreshChange(event.target.checked)
+              <path
+                d="M6 4l5 4-5 4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <h2 className="min-w-0 flex-1 text-sm font-medium text-white">OSM Data</h2>
+            {preferFresh ? (
+              <span className="shrink-0 text-xs text-slate-400">cache off</span>
+            ) : ageLabel ? (
+              <span
+                className={cn('shrink-0 text-xs', cacheStale ? 'text-amber-400' : 'text-slate-400')}
+              >
+                from ~{ageLabel}
+              </span>
+            ) : null}
+          </summary>
+          <div className="mt-3 space-y-2">
+            {preferFresh ? (
+              <p className="text-sm leading-tight text-slate-400">
+                Cache is off; OSM is fetched fresh.
+              </p>
+            ) : cacheAgeDistance ? (
+              <p className="text-sm leading-tight text-slate-400">
+                OSM data is cached locally and {cacheAgeDistance} old.
+              </p>
+            ) : (
+              <p className="text-sm leading-tight text-slate-400">
+                OSM data is cached locally after the first load.
+              </p>
+            )}
+            <button
+              type="button"
+              className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-400 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={zoom < viewMinZoom || coverageBusy || !mainMap}
+              onClick={() => {
+                void reloadViewport({ force: true, clearPersistedOnForce: true })
               }}
-            />
-            Always fetch fresh OSM
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
-            <input
-              type="checkbox"
-              className="rounded border-slate-700 bg-slate-900 text-sky-500"
-              checked={coverageDebug}
-              onChange={(event) => updateSearch({ coverageDebug: event.target.checked })}
-            />
-            Show coverage outline (debug)
-          </label>
-        </div>
-      </details>
-    </section>
+            >
+              Reload OSM for this view
+            </button>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
+              <input
+                type="checkbox"
+                className="rounded border-slate-700 bg-slate-900 text-sky-500"
+                checked={preferFresh}
+                onChange={(event) => {
+                  void onPreferFreshChange(event.target.checked)
+                }}
+              />
+              Always fetch fresh OSM
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
+              <input
+                type="checkbox"
+                className="rounded border-slate-700 bg-slate-900 text-sky-500"
+                checked={coverageDebug}
+                onChange={(event) => updateSearch({ coverageDebug: event.target.checked })}
+              />
+              Show coverage outline (debug)
+            </label>
+          </div>
+        </details>
+      </section>
+    </>
   )
 }
