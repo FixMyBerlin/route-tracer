@@ -18,7 +18,6 @@ export const indexSearchDefaults = {
   step: 'image' as const satisfies WorkflowStep,
   /** Show the snap network while tracing so start/end clicks have a visible target. */
   network: 'routing' as const satisfies NetworkHighlightMode,
-  coverageDebug: false,
 }
 
 /** Parsed index-route search (output of `validateSearch`). */
@@ -55,10 +54,6 @@ export const indexSearchSchema = z.object({
     .enum(networkHighlightModes)
     .default(indexSearchDefaults.network)
     .catch(indexSearchDefaults.network),
-  coverageDebug: z
-    .boolean()
-    .default(indexSearchDefaults.coverageDebug)
-    .catch(indexSearchDefaults.coverageDebug),
 })
 
 export type IndexSearch = z.infer<typeof indexSearchSchema>
@@ -72,7 +67,6 @@ export type IndexSearchParams = {
   overlay?: string
   route?: string
   network?: Exclude<NetworkHighlightMode, 'routing'>
-  coverageDebug?: true
 }
 
 function isOverlaySearchState(value: unknown): value is NonNullable<IndexSearch['overlay']> {
@@ -102,6 +96,5 @@ export function serializeIndexSearch(search: IndexSearch): IndexSearchParams {
       search.network === indexSearchDefaults.network
         ? undefined
         : (search.network as Exclude<NetworkHighlightMode, 'routing'>),
-    coverageDebug: search.coverageDebug ? true : undefined,
   }
 }

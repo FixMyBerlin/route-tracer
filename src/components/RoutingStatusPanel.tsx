@@ -1,27 +1,16 @@
 import { formatCoverageAgeHour } from '@osm-editor-kit/osm-coverage'
-import { useQueryClient } from '@tanstack/react-query'
 import { formatDistanceStrict } from 'date-fns'
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
-import { cn } from '@/shared/cn'
+import { useMapViewEpoch, useOsmStorageReady } from '@/shared/map/map-chrome-store'
 import { NETWORK_HIGHLIGHT_COLORS, viewMinZoom } from '@/shared/routing/constants'
 import { scheduleCoverageFromMap } from '@/shared/routing/map-helpers'
-import {
-  useOsmCoveragePrefsActions,
-  useOsmPreferFresh,
-} from '@/shared/routing/osm-coverage-prefs-store'
-import {
-  clearPersistedOsmCoverage,
-  emptyOsmCoverageData,
-  osmCoverageSessionKey,
-  useIsOsmCoverageFetching,
-  useOsmCoverageFetch,
-  useOsmCoverageQuery,
-} from '@/shared/routing/osm-coverage-query'
+import { useOsmCoverageFetch, useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
 import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
 import type { NetworkHighlightMode } from '@/shared/routing/search-schema'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
+import { viewportNeedsOsmFetch } from '@/shared/routing/viewport-needs-osm-fetch'
 
 type RoutingStatusPanelProps = {
   zoom: number
@@ -67,13 +56,32 @@ const highlightOptions: {
   },
 ]
 
+function ReloadIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none">
+      <path
+        d="M3.2 8a4.8 4.8 0 0 1 8.15-3.4M12.8 8a4.8 4.8 0 0 1-8.15 3.4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11.2 2.8v2.4H8.8M4.8 13.2V10.8h2.4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
-  const coverageDebug = Route.useSearch({ select: (search) => search.coverageDebug })
   const network = Route.useSearch({ select: (search) => search.network })
   const { updateSearch } = useIndexSearchNavigation()
-  const isFetching = useIsOsmCoverageFetching()
   const { wayCount, edgeCount, graphReady, graphBuilding, graphError } = useRoutingReadiness()
   const savedAt = useOsmCoverageQuery({ select: (data) => data.savedAt })
+  const coverage = useOsmCoverageQuery({ select: (data) => data.coverage })
   const savedAtIso = savedAt.data ?? null
   const nowMs = useMinuteClockMs()
   const ageLabel = formatCoverageAgeHour(savedAtIso, new Date(nowMs))
@@ -82,16 +90,22 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
   const cacheAgeDistance = Number.isFinite(savedAtMs)
     ? formatDistanceStrict(savedAtMs, nowMs)
     : null
-  const preferFresh = useOsmPreferFresh()
-  const { setPreferFresh } = useOsmCoveragePrefsActions()
-  const queryClient = useQueryClient()
   const { mainMap } = useMap()
+  const viewEpoch = useMapViewEpoch()
+  const storageReady = useOsmStorageReady()
   const { loadOsmData, isFetching: coverageBusy } = useOsmCoverageFetch()
+  const reloadDialogRef = useRef<HTMLDialogElement>(null)
 
-  let status: string | null = 'Pan the map to load OSM highways.'
+  const mapLibre = mainMap?.getMap() ?? null
+  const fetchArgs = viewEpoch >= 0 && mapLibre ? scheduleCoverageFromMap(mapLibre) : null
+  const needsFetch =
+    fetchArgs != null &&
+    viewportNeedsOsmFetch(fetchArgs.bounds, coverage.data, fetchArgs.zoom, fetchArgs.mapSizePx)
+
+  let status: string | null = 'Load the road network for this view to start tracing.'
   let tone: 'muted' | 'loading' | 'error' = 'muted'
 
-  if (isFetching || graphBuilding) {
+  if (coverageBusy || graphBuilding) {
     status = 'Loading OSM…'
     tone = 'loading'
   } else if (graphError) {
@@ -104,10 +118,24 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
     tone = 'loading'
   }
 
-  async function reloadViewport(options?: { force?: boolean; clearPersistedOnForce?: boolean }) {
-    const map = mainMap?.getMap()
-    if (!map) return
-    const args = scheduleCoverageFromMap(map)
+  const zoomTooLow = zoom < viewMinZoom
+  const loadDisabled = !mapLibre || !storageReady || coverageBusy || zoomTooLow || !needsFetch
+  const reloadDisabled = !mapLibre || !storageReady || coverageBusy || zoomTooLow
+  const loadDisabledReason = !mapLibre
+    ? 'Map is not ready'
+    : !storageReady
+      ? 'Restoring cached OSM…'
+      : coverageBusy
+        ? 'Loading OSM…'
+        : zoomTooLow
+          ? 'Zoom in to load the road network'
+          : !needsFetch
+            ? 'Road network for this view is already loaded'
+            : undefined
+
+  async function loadViewport(options?: { force?: boolean; clearPersistedOnForce?: boolean }) {
+    if (!mapLibre) return
+    const args = scheduleCoverageFromMap(mapLibre)
     await loadOsmData(args.bounds, args.zoom, {
       mapSizePx: args.mapSizePx,
       force: options?.force,
@@ -115,14 +143,13 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
     })
   }
 
-  async function onPreferFreshChange(next: boolean) {
-    setPreferFresh(next)
-    if (!next) return
-    await clearPersistedOsmCoverage({})
-    queryClient.setQueryData(osmCoverageSessionKey({}), emptyOsmCoverageData())
-    if (mainMap && mainMap.getMap().getZoom() >= viewMinZoom) {
-      await reloadViewport({ force: true, clearPersistedOnForce: true })
-    }
+  function openReloadConfirm() {
+    reloadDialogRef.current?.showModal()
+  }
+
+  function confirmReload() {
+    reloadDialogRef.current?.close()
+    void loadViewport({ force: true, clearPersistedOnForce: true })
   }
 
   return (
@@ -220,79 +247,80 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
       </section>
 
       <section className="border-b border-slate-800 py-5">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
-            <svg
-              aria-hidden
-              viewBox="0 0 16 16"
-              className="size-3 shrink-0 text-white transition group-open:rotate-90"
-              fill="none"
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-sm font-medium text-white">OSM Data</h2>
+          {ageLabel ? (
+            <span
+              className={
+                cacheStale ? 'shrink-0 text-xs text-amber-400' : 'shrink-0 text-xs text-slate-400'
+              }
             >
-              <path
-                d="M6 4l5 4-5 4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <h2 className="min-w-0 flex-1 text-sm font-medium text-white">OSM Data</h2>
-            {preferFresh ? (
-              <span className="shrink-0 text-xs text-slate-400">cache off</span>
-            ) : ageLabel ? (
-              <span
-                className={cn('shrink-0 text-xs', cacheStale ? 'text-amber-400' : 'text-slate-400')}
-              >
-                from ~{ageLabel}
-              </span>
-            ) : null}
-          </summary>
-          <div className="mt-3 space-y-2">
-            {preferFresh ? (
-              <p className="text-sm leading-tight text-slate-400">
-                Cache is off; OSM is fetched fresh.
-              </p>
-            ) : cacheAgeDistance ? (
-              <p className="text-sm leading-tight text-slate-400">
-                OSM data is cached locally and {cacheAgeDistance} old.
-              </p>
-            ) : (
-              <p className="text-sm leading-tight text-slate-400">
-                OSM data is cached locally after the first load.
-              </p>
-            )}
+              from ~{ageLabel}
+            </span>
+          ) : null}
+        </div>
+
+        {cacheAgeDistance ? (
+          <p className="mt-2 text-sm leading-tight text-slate-400">
+            OSM data is cached locally and {cacheAgeDistance} old.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm leading-tight text-slate-400">
+            OSM data is cached locally after the first load.
+          </p>
+        )}
+
+        <div className="mt-4 flex items-stretch gap-2">
+          <span className="min-w-0 flex-1" title={loadDisabled ? loadDisabledReason : undefined}>
             <button
               type="button"
-              className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-400 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={zoom < viewMinZoom || coverageBusy || !mainMap}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={loadDisabled}
               onClick={() => {
-                void reloadViewport({ force: true, clearPersistedOnForce: true })
+                void loadViewport()
               }}
             >
-              Reload OSM for this view
+              Load road network for current view port
             </button>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
-              <input
-                type="checkbox"
-                className="rounded border-slate-700 bg-slate-900 text-sky-500"
-                checked={preferFresh}
-                onChange={(event) => {
-                  void onPreferFreshChange(event.target.checked)
-                }}
-              />
-              Always fetch fresh OSM
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
-              <input
-                type="checkbox"
-                className="rounded border-slate-700 bg-slate-900 text-sky-500"
-                checked={coverageDebug}
-                onChange={(event) => updateSearch({ coverageDebug: event.target.checked })}
-              />
-              Show coverage outline (debug)
-            </label>
+          </span>
+          <span title="Reload OSM for current view box">
+            <button
+              type="button"
+              aria-label="Reload OSM for current view box"
+              className="flex size-[2.625rem] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={reloadDisabled}
+              onClick={openReloadConfirm}
+            >
+              <ReloadIcon />
+            </button>
+          </span>
+        </div>
+        <p className="mt-1.5 text-xs leading-tight text-slate-500">Zoom in to make it smaller</p>
+
+        <dialog
+          ref={reloadDialogRef}
+          className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-200 shadow-xl backdrop:bg-black/50"
+        >
+          <p className="text-sm leading-snug text-slate-200">
+            Are you sure you want to load fresh data from OSM servers?
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800"
+              onClick={() => reloadDialogRef.current?.close()}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
+              onClick={confirmReload}
+            >
+              Reload
+            </button>
           </div>
-        </details>
+        </dialog>
       </section>
     </>
   )

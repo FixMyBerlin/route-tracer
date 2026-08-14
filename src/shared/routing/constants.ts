@@ -1,8 +1,5 @@
-/** Minimum zoom before viewport OSM coverage is fetched. */
+/** Minimum zoom before viewport OSM coverage can be fetched. */
 export const viewMinZoom = 15
-
-/** Debounce map moves before triggering Overpass coverage fetches. */
-export const coverageFetchDebounceMs = 400
 
 /** Overpass hairline (sky) vs routing-graph hairline (purple). */
 export const NETWORK_HIGHLIGHT_COLORS = {
