@@ -6,25 +6,25 @@ import {
 } from '@/shared/routing/densify-osm-for-snapping'
 
 describe('densifyInsertCount', () => {
-  it('skips segments at or under the 12 m spacing', () => {
-    expect(densifyInsertCount(8)).toBe(0)
-    expect(densifyInsertCount(12)).toBe(0)
+  it('skips segments at or under the 5 m spacing', () => {
+    expect(densifyInsertCount(4)).toBe(0)
+    expect(densifyInsertCount(5)).toBe(0)
   })
 
-  it('inserts a midpoint on 12–24 m segments (the old floor loop skipped these)', () => {
-    expect(densifyInsertCount(13)).toBe(1)
-    expect(densifyInsertCount(20)).toBe(1)
-    expect(densifyInsertCount(23)).toBe(1)
+  it('inserts a midpoint on 5–10 m segments', () => {
+    expect(densifyInsertCount(6)).toBe(1)
+    expect(densifyInsertCount(9)).toBe(1)
   })
 
-  it('spaces longer segments about every 12 m', () => {
-    expect(densifyInsertCount(36)).toBe(2)
-    expect(densifyInsertCount(100)).toBe(7)
+  it('spaces longer segments about every 5 m', () => {
+    expect(densifyInsertCount(15)).toBe(2)
+    expect(densifyInsertCount(20)).toBe(3)
+    expect(densifyInsertCount(100)).toBe(19)
   })
 })
 
 describe('densifyParsedOsmForSnapping', () => {
-  it('adds a mid-block node on a 20 m way', () => {
+  it('adds mid-block nodes on a 20 m way (~5 m spacing)', () => {
     const data = emptyParsedOsmData()
     const lat = 51.26
     const metersPerLon = 111_320 * Math.cos((lat * Math.PI) / 180)
@@ -41,8 +41,8 @@ describe('densifyParsedOsmForSnapping', () => {
 
     const densified = densifyParsedOsmForSnapping(data)
 
-    expect(densified.ways[10]?.nodes).toHaveLength(3)
-    expect(Object.keys(densified.nodeCoords)).toHaveLength(3)
+    expect(densified.ways[10]?.nodes).toHaveLength(5)
+    expect(Object.keys(densified.nodeCoords)).toHaveLength(5)
     expect(data.ways[10]?.nodes).toEqual([1, 2])
   })
 })

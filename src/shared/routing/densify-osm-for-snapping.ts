@@ -1,7 +1,12 @@
 import type { ParsedOsmData } from '@osm-editor-kit/osm-data'
 
 /** Insert extra OSM nodes so route-snapper can snap mid-block, not only at junctions. */
-const SNAP_NODE_SPACING_METERS = 12
+const SNAP_NODE_SPACING_METERS = 5
+
+/** ~0.1 m — keys for original Overpass nodes vs densified inserts. */
+const COORD_KEY_DECIMALS = 6
+
+let lastOriginalOsmNodeKeys = new Set<string>()
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
   const toRad = (degrees: number) => (degrees * Math.PI) / 180
@@ -12,6 +17,14 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
   return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
+}
+
+export function osmNodeCoordKey(lon: number, lat: number) {
+  return `${lon.toFixed(COORD_KEY_DECIMALS)},${lat.toFixed(COORD_KEY_DECIMALS)}`
+}
+
+export function isOriginalOsmNode(lon: number, lat: number) {
+  return lastOriginalOsmNodeKeys.has(osmNodeCoordKey(lon, lat))
 }
 
 /** How many extra nodes to place between two OSM nodes `lengthMeters` apart. */
@@ -26,6 +39,14 @@ export function densifyInsertCount(lengthMeters: number, spacingMeters = SNAP_NO
  * targets exist about every {@link SNAP_NODE_SPACING_METERS} along the carriageway.
  */
 export function densifyParsedOsmForSnapping(data: ParsedOsmData): ParsedOsmData {
+  const originalKeys = new Set<string>()
+  for (const coords of Object.values(data.nodeCoords)) {
+    const [lat, lon] = coords
+    if (typeof lat !== 'number' || typeof lon !== 'number') continue
+    originalKeys.add(osmNodeCoordKey(lon, lat))
+  }
+  lastOriginalOsmNodeKeys = originalKeys
+
   const nodeCoords = { ...data.nodeCoords }
   const ways = { ...data.ways }
   let nextId = 1

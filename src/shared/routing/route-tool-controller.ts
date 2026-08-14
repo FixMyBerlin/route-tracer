@@ -1,11 +1,24 @@
-import type { FeatureCollection } from 'geojson'
+import type { FeatureCollection, LineString } from 'geojson'
 import type { MapMouseEvent } from 'maplibre-gl'
 import type { RouteTool } from 'route-snapper-ts'
+import { decorateRouteToolGeoJson } from '@/shared/routing/decorate-route-tool-geojson'
+import {
+  insertIndexAlongSegments,
+  insertWaypointAt,
+  isNearExistingWaypoint,
+} from '@/shared/routing/insert-route-waypoint'
+import {
+  ROAD_SNAP_RADIUS_METERS,
+  haversineMeters,
+  nearestPointOnLines,
+} from '@/shared/routing/nearest-road-point'
+import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
 import { clearRouteState, getRouteSnapMode } from '@/shared/routing/route-store'
 
 let activeRouteTool: RouteTool | null = null
 /** Last map cursor position in lon/lat — used so S updates the active line immediately. */
 let lastPointerLonLat: [number, number] | null = null
+let routeSnapperNetwork: FeatureCollection<LineString> | null = null
 
 export type RouteDrawMode = 'snapped' | 'freehand'
 
@@ -19,19 +32,12 @@ export function setActiveRouteTool(tool: RouteTool | null) {
   if (!tool) lastPointerLonLat = null
 }
 
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const toRad = (degrees: number) => (degrees * Math.PI) / 180
-  const earthRadiusMeters = 6_371_000
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
+export function setRouteSnapperNetwork(network: FeatureCollection<LineString> | null) {
+  routeSnapperNetwork = network
 }
 
 function syncRouteToolRender(routeTool: RouteTool) {
-  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as {
+  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection & {
     cursor?: string
     snap_mode?: boolean
     undo_length?: number
@@ -90,7 +96,9 @@ function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
   if (!lonLat) return
   const map = routeTool.map
   const point = map.project({ lng: lonLat[0], lat: lonLat[1] })
-  const circleRadiusMeters = map.unproject(point).distanceTo(map.unproject([point.x - 30, point.y]))
+  const circleRadiusMeters = map
+    .unproject(point)
+    .distanceTo(map.unproject({ x: point.x - 30, y: point.y }))
   routeTool.inner.onMouseMove(lonLat[0], lonLat[1], circleRadiusMeters)
 }
 
@@ -99,6 +107,17 @@ function restoreExtendRoute(routeTool: RouteTool) {
     avoid_doubling_back: false,
     extend_route: true,
   })
+}
+
+function readHoveredPoint(routeTool: RouteTool) {
+  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection
+  for (const feature of geojson.features) {
+    if (feature.geometry?.type !== 'Point' || !feature.properties?.hovered) continue
+    const [lng, lat] = feature.geometry.coordinates
+    if (typeof lng !== 'number' || typeof lat !== 'number') continue
+    return { lon: lng, lat, type: String(feature.properties.type ?? '') }
+  }
+  return null
 }
 
 function nearestSnappableNode(routeTool: RouteTool, lon: number, lat: number) {
@@ -125,10 +144,14 @@ function nearestSnappableNode(routeTool: RouteTool, lon: number, lat: number) {
 function convertLastFreeIfOnNetwork(routeTool: RouteTool) {
   const waypoints = readWaypoints(routeTool)
   const last = waypoints.at(-1)
-  if (!last || last.snapped) return
+  if (!last || last.snapped) {
+    return { converted: false, dist: null as number | null }
+  }
 
   const nearest = nearestSnappableNode(routeTool, last.lon, last.lat)
-  if (!nearest || nearest.dist > SNAP_CONVERT_METERS) return
+  if (!nearest || nearest.dist > SNAP_CONVERT_METERS) {
+    return { converted: false, dist: nearest?.dist ?? null }
+  }
 
   const next = waypoints.map((waypoint, index) =>
     index === waypoints.length - 1
@@ -137,6 +160,7 @@ function convertLastFreeIfOnNetwork(routeTool: RouteTool) {
   )
   routeTool.inner.editExisting(next)
   restoreExtendRoute(routeTool)
+  return { converted: true, dist: nearest.dist }
 }
 
 function forceEnterSnapMode(routeTool: RouteTool) {
@@ -162,12 +186,121 @@ function forceEnterFreehandMode(routeTool: RouteTool) {
   syncRouteToolRender(routeTool)
 }
 
+function commitWaypoints(routeTool: RouteTool, waypoints: RouteWaypoint[], stayFreehand: boolean) {
+  routeTool.inner.editExisting(waypoints)
+  restoreExtendRoute(routeTool)
+  if (stayFreehand) {
+    forceEnterFreehandMode(routeTool)
+    return
+  }
+  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+  syncRouteToolRender(routeTool)
+}
+
+function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
+  const pointer = lastPointerLonLat
+  const hover = readHoveredPoint(routeTool)
+  const waypoints = readWaypoints(routeTool)
+  const stayFreehand = !getRouteSnapMode()
+
+  if (
+    hover &&
+    (hover.type === 'snapped-waypoint' || hover.type === 'free-waypoint') &&
+    pointer &&
+    haversineMeters(pointer[1], pointer[0], hover.lat, hover.lon) <= ROAD_SNAP_RADIUS_METERS
+  ) {
+    originalOnClick()
+    return
+  }
+
+  if (!pointer) {
+    originalOnClick()
+    return
+  }
+
+  const [clickLon, clickLat] = pointer
+  const confirmed = normalizeRouteToolGeoJson(
+    JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection,
+  )
+  const onDrawnRoute = insertIndexAlongSegments(
+    confirmed.map((segment) => segment.coordinates),
+    clickLon,
+    clickLat,
+  )
+  const onRoad = routeSnapperNetwork
+    ? nearestPointOnLines(routeSnapperNetwork, clickLon, clickLat)
+    : null
+
+  if (onDrawnRoute) {
+    const segment = confirmed[onDrawnRoute.segmentIndex]
+    const snapOnSegment = !stayFreehand && segment?.segment_kind === 'snapped'
+    let placeLon = onDrawnRoute.lon
+    let placeLat = onDrawnRoute.lat
+    let snapped = false
+    if (snapOnSegment) {
+      const node = nearestSnappableNode(routeTool, onDrawnRoute.lon, onDrawnRoute.lat)
+      if (node) {
+        placeLon = node.lon
+        placeLat = node.lat
+        snapped = true
+      }
+    }
+    if (isNearExistingWaypoint(waypoints, placeLon, placeLat)) {
+      originalOnClick()
+      return
+    }
+    commitWaypoints(
+      routeTool,
+      insertWaypointAt(waypoints, onDrawnRoute.insertIndex, {
+        lon: placeLon,
+        lat: placeLat,
+        snapped,
+      }),
+      stayFreehand,
+    )
+    return
+  }
+
+  if (onRoad) {
+    if (isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
+      originalOnClick()
+      return
+    }
+    if (stayFreehand) {
+      commitWaypoints(
+        routeTool,
+        [...waypoints, { lon: onRoad.lon, lat: onRoad.lat, snapped: false }],
+        true,
+      )
+      return
+    }
+    routeTool.addSnappedWaypoint([onRoad.lon, onRoad.lat])
+    restoreExtendRoute(routeTool)
+    applyPointer(routeTool, pointer)
+    return
+  }
+
+  if (stayFreehand) {
+    originalOnClick()
+    return
+  }
+}
+
 /**
  * Route-snapper registers `s` / Enter on `keypress` and finishes on double-click.
  * We own mode switching via TanStack Hotkeys and keep the tool in continuous edit.
  */
 export function configureRouteToolInteractions(routeTool: RouteTool) {
   restoreExtendRoute(routeTool)
+
+  const originalGjSet = routeTool.routeToolGj.set.bind(routeTool.routeToolGj)
+  routeTool.routeToolGj.set = (geojson) => {
+    if (geojson.type !== 'FeatureCollection') {
+      originalGjSet(geojson)
+      return
+    }
+    originalGjSet(decorateRouteToolGeoJson(geojson, lastPointerLonLat, routeSnapperNetwork))
+  }
 
   document.removeEventListener('keypress', routeTool.onKeyPress)
   const originalKeyPress = routeTool.onKeyPress.bind(routeTool)
@@ -194,8 +327,26 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.onMouseMove = (event: MapMouseEvent) => {
     lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
     originalMouseMove(event)
+    if (!routeTool.active) return
+    const hover = readHoveredPoint(routeTool)
+    const hoverFar =
+      hover !== null &&
+      haversineMeters(event.lngLat.lat, event.lngLat.lng, hover.lat, hover.lon) >
+        ROAD_SNAP_RADIUS_METERS
+    const onRoad = routeSnapperNetwork
+      ? nearestPointOnLines(routeSnapperNetwork, event.lngLat.lng, event.lngLat.lat)
+      : null
+    if (onRoad || hoverFar) syncRouteToolRender(routeTool)
   }
   routeTool.map.on('mousemove', routeTool.onMouseMove)
+
+  const originalOnClick = routeTool.onClick.bind(routeTool)
+  routeTool.map.off('click', routeTool.onClick)
+  routeTool.onClick = () => {
+    if (!routeTool.active) return
+    handleRouteClick(routeTool, originalOnClick)
+  }
+  routeTool.map.on('click', routeTool.onClick)
 }
 
 export function toggleDrawThroughMode() {
@@ -237,6 +388,7 @@ function stripHoverPreview(geojson: FeatureCollection): FeatureCollection {
     type: 'FeatureCollection',
     features: geojson.features.filter((feature) => {
       if (feature.properties?.hovered) return false
+      if (feature.properties?.type === 'snap-preview') return false
       if (feature.geometry?.type !== 'LineString') return true
       const end = feature.geometry.coordinates.at(-1)
       if (!end) return true

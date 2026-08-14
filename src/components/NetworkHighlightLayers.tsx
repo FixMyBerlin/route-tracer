@@ -1,6 +1,7 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
 import { NETWORK_HIGHLIGHT_COLORS } from '@/shared/routing/constants'
+import { ROUTE_SNAPPED_LAYER_ID } from '@/shared/routing/route-layer-ids'
 import { useRouteSnapperGraphQuery } from '@/shared/routing/route-snapper-query'
 import { routingNetworkSnapNodes } from '@/shared/routing/routing-network-snap-nodes'
 
@@ -22,8 +23,7 @@ const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
  * Routing graph: purple hairline plus small snap-node dots on top of the way
  * (fixed pixel size, independent of road class).
  *
- * No `beforeId` — Positron roads stay as-is. `RouteToolLayers` mounts later so the
- * snapped/freehand route paints on top of this overlay.
+ * Inserted below the drawn route (`ROUTE_SNAPPED_LAYER_ID`). Positron is untouched.
  */
 export function NetworkHighlightLayers() {
   const mode = Route.useSearch({ select: (search) => search.network })
@@ -44,6 +44,7 @@ export function NetworkHighlightLayers() {
         <Layer
           id={OVERPASS_HIGHLIGHT_LAYER_ID}
           type="line"
+          beforeId={ROUTE_SNAPPED_LAYER_ID}
           layout={{
             visibility: mode === 'overpass' ? 'visible' : 'none',
             'line-cap': 'round',
@@ -59,6 +60,7 @@ export function NetworkHighlightLayers() {
         <Layer
           id={ROUTING_HIGHLIGHT_LAYER_ID}
           type="line"
+          beforeId={ROUTE_SNAPPED_LAYER_ID}
           layout={{
             visibility: mode === 'routing' ? 'visible' : 'none',
             'line-cap': 'round',
@@ -74,6 +76,7 @@ export function NetworkHighlightLayers() {
         <Layer
           id={ROUTING_HIGHLIGHT_NODES_LAYER_ID}
           type="circle"
+          beforeId={ROUTE_SNAPPED_LAYER_ID}
           layout={{
             visibility: mode === 'routing' ? 'visible' : 'none',
           }}

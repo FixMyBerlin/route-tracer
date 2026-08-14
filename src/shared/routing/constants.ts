@@ -15,3 +15,9 @@ export const ROUTE_SEGMENT_COLORS = {
   snapped: '#0f172a',
   freehand: '#0f172a',
 } as const
+
+/** Confirmed waypoints: graph/OSM nodes vs mid-edge / freehand points. */
+export const ROUTE_WAYPOINT_COLORS = {
+  edge: '#dc2626',
+  mid: '#ea580c',
+} as const

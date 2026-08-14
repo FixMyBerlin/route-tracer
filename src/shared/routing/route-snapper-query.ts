@@ -14,7 +14,7 @@ function useCoverageGraph() {
 }
 
 const routeSnapperGraphApi = createRouteSnapperGraphApi({
-  getGraphKey: () => ['route-tracer', 'route-snapper-graph', 'densify-v2'] as const,
+  getGraphKey: () => ['route-tracer', 'route-snapper-graph', 'densify-v3'] as const,
   useCoverageGraph,
 })
 
