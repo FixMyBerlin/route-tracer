@@ -32,7 +32,8 @@ const stepCopy: Record<WorkflowStep, { title: string; description: React.ReactNo
   },
   export: {
     title: 'Export the route',
-    description: 'Download GeoJSON or copy a shareable link. Route geometry stays in the URL.',
+    description:
+      'Download a GeoJSON FeatureCollection with one LineString per segment. Route geometry, overlay alignment, and image source are encoded in the URL.',
   },
 }
 

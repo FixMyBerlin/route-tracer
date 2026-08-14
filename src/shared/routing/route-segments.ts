@@ -12,10 +12,10 @@ export type RouteSegment = {
 }
 
 /**
- * Douglas–Peucker tolerance in degrees (~1 m at mid-latitudes).
+ * Douglas–Peucker tolerance in degrees (~0.5 m at mid-latitudes).
  * Strips densified / colinear vertices without changing the route's look.
  */
-const ROUTE_EXPORT_SIMPLIFY_TOLERANCE = 0.00001
+const ROUTE_EXPORT_SIMPLIFY_TOLERANCE = 0.000005
 
 export type RouteExportOptions = {
   /** When true (default), simplify each segment LineString before download. */
