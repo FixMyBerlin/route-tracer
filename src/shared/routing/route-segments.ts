@@ -125,7 +125,7 @@ export function segmentsToRouteFeature(
   }
 }
 
-function segmentsToWaypoints(segments: RouteSegment[]) {
+export function segmentsToWaypoints(segments: RouteSegment[]) {
   const waypoints: RouteProps['waypoints'] = []
 
   const first = segments[0]?.coordinates[0]

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   densifyInsertCount,
   densifyParsedOsmForSnapping,
+  isOriginalOsmNode,
 } from '@/shared/routing/densify-osm-for-snapping'
 
 describe('densifyInsertCount', () => {
@@ -44,5 +45,8 @@ describe('densifyParsedOsmForSnapping', () => {
     expect(densified.ways[10]?.nodes).toHaveLength(5)
     expect(Object.keys(densified.nodeCoords)).toHaveLength(5)
     expect(data.ways[10]?.nodes).toEqual([1, 2])
+    expect(isOriginalOsmNode(12.37, lat)).toBe(true)
+    const midLon = 12.37 + 10 / metersPerLon
+    expect(isOriginalOsmNode(midLon, lat)).toBe(false)
   })
 })

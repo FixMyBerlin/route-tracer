@@ -19,7 +19,7 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
   return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
 }
 
-export function osmNodeCoordKey(lon: number, lat: number) {
+function osmNodeCoordKey(lon: number, lat: number) {
   return `${lon.toFixed(COORD_KEY_DECIMALS)},${lat.toFixed(COORD_KEY_DECIMALS)}`
 }
 

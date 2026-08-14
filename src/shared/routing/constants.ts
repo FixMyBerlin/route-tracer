@@ -16,6 +16,13 @@ export const ROUTE_SEGMENT_COLORS = {
   freehand: '#0f172a',
 } as const
 
+export const ROUTE_LINE_WIDTH_PX = 5
+/**
+ * Shift snapped strokes to the right of travel (80% of width). Outbound and
+ * inbound then sit on opposite sides of the road, so a backtrace stays visible.
+ */
+export const ROUTE_SNAPPED_LINE_OFFSET_PX = ROUTE_LINE_WIDTH_PX * 0.8
+
 /** Confirmed waypoints: graph/OSM nodes vs mid-edge / freehand points. */
 export const ROUTE_WAYPOINT_COLORS = {
   edge: '#dc2626',
