@@ -14,6 +14,7 @@ import { useRouteActions, useRouteSegments } from '@/shared/routing/route-store'
 import {
   configureRouteToolInteractions,
   setActiveRouteTool,
+  setRouteSnapperNetwork,
 } from '@/shared/routing/route-tool-controller'
 import {
   usePersistRouteSegments,
@@ -73,7 +74,9 @@ export function RouteSnapperHost() {
   const mapRef = maps[MAIN_MAP_ID]
   /** Stable MapLibre instance (MapRef identity from react-map-gl may churn). */
   const mapLibre = mapRef?.getMap() ?? null
-  const graphBytes = useRouteSnapperGraphQuery().data?.graphBytes
+  const graphQuery = useRouteSnapperGraphQuery()
+  const graphBytes = graphQuery.data?.graphBytes
+  const routingNetworkLatest = useEffectEvent(() => graphQuery.data?.routingNetwork ?? null)
   const urlSegments = useRouteUrlSegments()
   const storedSegments = useRouteSegments()
   const persistRouteSegments = usePersistRouteSegments()
@@ -133,6 +136,7 @@ export function RouteSnapperHost() {
 
         routeToolRef.current = routeTool
         configureRouteToolInteractions(routeTool)
+        setRouteSnapperNetwork(routingNetworkLatest())
         setActiveRouteTool(routeTool)
 
         if (
@@ -153,6 +157,7 @@ export function RouteSnapperHost() {
         routeToolRef.current?.tearDown()
         routeToolRef.current = null
         setActiveRouteTool(null)
+        setRouteSnapperNetwork(null)
       }
     },
     // Recreate only when the MapLibre instance or graph bytes change.

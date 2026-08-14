@@ -12,24 +12,33 @@ import {
   haversineMeters,
   nearestPointOnLines,
 } from '@/shared/routing/nearest-road-point'
+import { pickRouteEndToResume, waypointsStartingFromEnd } from '@/shared/routing/resume-route-end'
 import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
 import { clearRouteState, getRouteSnapMode } from '@/shared/routing/route-store'
-
-let activeRouteTool: RouteTool | null = null
-/** Last map cursor position in lon/lat — used so S updates the active line immediately. */
-let lastPointerLonLat: [number, number] | null = null
-let routeSnapperNetwork: FeatureCollection<LineString> | null = null
 
 export type RouteDrawMode = 'snapped' | 'freehand'
 
 type RouteWaypoint = { lon: number; lat: number; snapped: boolean }
+
+let activeRouteTool: RouteTool | null = null
+/** Last map cursor position in lon/lat — used so S updates the active line immediately. */
+let lastPointerLonLat: [number, number] | null = null
+/** Confirmed waypoints kept after finish so an endpoint click can resume drawing. */
+let inactiveRouteWaypoints: RouteWaypoint[] | null = null
+let routeSnapperNetwork: FeatureCollection<LineString> | null = null
+
+/** Matches route-snapper-ts hover/click radius. */
+const SNAP_DISTANCE_PIXELS = 30
 
 /** Convert a freehand end to a graph node when S re-enables snapping. */
 const SNAP_CONVERT_METERS = 40
 
 export function setActiveRouteTool(tool: RouteTool | null) {
   activeRouteTool = tool
-  if (!tool) lastPointerLonLat = null
+  if (!tool) {
+    lastPointerLonLat = null
+    inactiveRouteWaypoints = null
+  }
 }
 
 export function setRouteSnapperNetwork(network: FeatureCollection<LineString> | null) {
@@ -92,14 +101,16 @@ function lastWaypointLonLat(routeTool: RouteTool): [number, number] | null {
   return last ? [last.lon, last.lat] : null
 }
 
+function snapRadiusMeters(routeTool: RouteTool, lonLat: [number, number]) {
+  const point = routeTool.map.project({ lng: lonLat[0], lat: lonLat[1] })
+  return routeTool.map
+    .unproject(point)
+    .distanceTo(routeTool.map.unproject([point.x - SNAP_DISTANCE_PIXELS, point.y]))
+}
+
 function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
   if (!lonLat) return
-  const map = routeTool.map
-  const point = map.project({ lng: lonLat[0], lat: lonLat[1] })
-  const circleRadiusMeters = map
-    .unproject(point)
-    .distanceTo(map.unproject({ x: point.x - 30, y: point.y }))
-  routeTool.inner.onMouseMove(lonLat[0], lonLat[1], circleRadiusMeters)
+  routeTool.inner.onMouseMove(lonLat[0], lonLat[1], snapRadiusMeters(routeTool, lonLat))
 }
 
 function restoreExtendRoute(routeTool: RouteTool) {
@@ -288,7 +299,8 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
 
 /**
  * Route-snapper registers `s` / Enter on `keypress` and finishes on double-click.
- * We own mode switching via TanStack Hotkeys and keep the tool in continuous edit.
+ * We own mode switching via TanStack Hotkeys. Double-click finishes; clicking an
+ * endpoint resumes drawing from that end.
  */
 export function configureRouteToolInteractions(routeTool: RouteTool) {
   restoreExtendRoute(routeTool)
@@ -299,7 +311,13 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
       originalGjSet(geojson)
       return
     }
-    originalGjSet(decorateRouteToolGeoJson(geojson, lastPointerLonLat, routeSnapperNetwork))
+    originalGjSet(
+      decorateRouteToolGeoJson(
+        geojson,
+        routeTool.active ? lastPointerLonLat : null,
+        routeSnapperNetwork,
+      ),
+    )
   }
 
   document.removeEventListener('keypress', routeTool.onKeyPress)
@@ -319,31 +337,36 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.onDoubleClick = (event: MapMouseEvent) => {
     if (!routeTool.active) return
     event.preventDefault()
+    // Double-click is [click, click, dblclick]. Undo the extra click so the
+    // last vertex is the finish location, then leave drawing mode.
+    routeTool.undo()
     finishActiveRoute()
   }
+  routeTool.map.on('dblclick', routeTool.onDoubleClick)
 
   const originalMouseMove = routeTool.onMouseMove.bind(routeTool)
   routeTool.map.off('mousemove', routeTool.onMouseMove)
   routeTool.onMouseMove = (event: MapMouseEvent) => {
     lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
     originalMouseMove(event)
-    if (!routeTool.active) return
-    const hover = readHoveredPoint(routeTool)
-    const hoverFar =
-      hover !== null &&
-      haversineMeters(event.lngLat.lat, event.lngLat.lng, hover.lat, hover.lon) >
-        ROAD_SNAP_RADIUS_METERS
-    const onRoad = routeSnapperNetwork
-      ? nearestPointOnLines(routeSnapperNetwork, event.lngLat.lng, event.lngLat.lat)
-      : null
-    if (onRoad || hoverFar) syncRouteToolRender(routeTool)
+    if (!routeTool.active) {
+      updateInactiveCursor(routeTool)
+      return
+    }
+    if (!routeSnapperNetwork) return
+    const onRoad = nearestPointOnLines(routeSnapperNetwork, event.lngLat.lng, event.lngLat.lat)
+    if (onRoad) syncRouteToolRender(routeTool)
   }
   routeTool.map.on('mousemove', routeTool.onMouseMove)
 
   const originalOnClick = routeTool.onClick.bind(routeTool)
   routeTool.map.off('click', routeTool.onClick)
-  routeTool.onClick = () => {
-    if (!routeTool.active) return
+  routeTool.onClick = (event?: MapMouseEvent) => {
+    if (event?.lngLat) lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
+    if (!routeTool.active) {
+      tryResumeFromEndpoint(routeTool)
+      return
+    }
     handleRouteClick(routeTool, originalOnClick)
   }
   routeTool.map.on('click', routeTool.onClick)
@@ -401,6 +424,7 @@ function stripHoverPreview(geojson: FeatureCollection): FeatureCollection {
 export function finishActiveRoute() {
   const routeTool = activeRouteTool
   if (!routeTool?.active) return
+  inactiveRouteWaypoints = readWaypoints(routeTool)
   const confirmed = stripHoverPreview(
     JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection,
   )
@@ -413,11 +437,53 @@ export function finishActiveRoute() {
   routeTool.map.doubleClickZoom.enable()
 }
 
+function updateInactiveCursor(routeTool: RouteTool) {
+  const pointer = lastPointerLonLat
+  if (!pointer || !inactiveRouteWaypoints?.length) {
+    routeTool.map.getCanvas().style.cursor = ''
+    return
+  }
+  const end = pickRouteEndToResume(
+    inactiveRouteWaypoints,
+    pointer[0],
+    pointer[1],
+    snapRadiusMeters(routeTool, pointer),
+  )
+  routeTool.map.getCanvas().style.cursor = end ? 'pointer' : ''
+}
+
+function tryResumeFromEndpoint(routeTool: RouteTool) {
+  const waypoints = inactiveRouteWaypoints
+  const pointer = lastPointerLonLat
+  if (!waypoints?.length || !pointer) return
+  const end = pickRouteEndToResume(
+    waypoints,
+    pointer[0],
+    pointer[1],
+    snapRadiusMeters(routeTool, pointer),
+  )
+  if (!end) return
+  resumeActiveRoute(routeTool, waypointsStartingFromEnd(waypoints, end))
+}
+
+function resumeActiveRoute(routeTool: RouteTool, waypoints: RouteWaypoint[]) {
+  inactiveRouteWaypoints = null
+  routeTool.startRoute()
+  routeTool.inner.editExisting(waypoints)
+  restoreExtendRoute(routeTool)
+  if (getRouteSnapMode()) {
+    forceEnterSnapMode(routeTool)
+    return
+  }
+  forceEnterFreehandMode(routeTool)
+}
+
 export function undoRouteEdit() {
   activeRouteTool?.undo()
 }
 
 export function clearActiveRoute() {
+  inactiveRouteWaypoints = null
   if (!activeRouteTool) {
     clearRouteState()
     return
