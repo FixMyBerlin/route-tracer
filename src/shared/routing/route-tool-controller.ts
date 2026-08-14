@@ -1,12 +1,14 @@
 import type { FeatureCollection, LineString } from 'geojson'
 import type { MapMouseEvent } from 'maplibre-gl'
 import type { RouteTool } from 'route-snapper-ts'
+import { ROUTE_WAYPOINT_RADIUS_PX } from '@/shared/routing/constants'
 import { decorateRouteToolGeoJson } from '@/shared/routing/decorate-route-tool-geojson'
 import {
   insertIndexAlongSegments,
   insertWaypointAt,
   isNearExistingWaypoint,
 } from '@/shared/routing/insert-route-waypoint'
+import { mergeAdjacentWaypoints } from '@/shared/routing/merge-route-waypoints'
 import {
   ROAD_SNAP_RADIUS_METERS,
   haversineMeters,
@@ -14,7 +16,8 @@ import {
 } from '@/shared/routing/nearest-road-point'
 import { pickRouteEndToResume, waypointsStartingFromEnd } from '@/shared/routing/resume-route-end'
 import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
-import { clearRouteState, getRouteSnapMode } from '@/shared/routing/route-store'
+import { clearRouteState, setRouteSnapModeState } from '@/shared/routing/route-store'
+import { withSnappedEnd, type SnapEndResult } from '@/shared/routing/snap-route-end'
 
 export type RouteDrawMode = 'snapped' | 'freehand'
 
@@ -23,26 +26,47 @@ type RouteWaypoint = { lon: number; lat: number; snapped: boolean }
 let activeRouteTool: RouteTool | null = null
 /** Last map cursor position in lon/lat — used so S updates the active line immediately. */
 let lastPointerLonLat: [number, number] | null = null
-/** Confirmed waypoints kept after finish so an endpoint click can resume drawing. */
-let inactiveRouteWaypoints: RouteWaypoint[] | null = null
+/**
+ * A finished route stays loaded in route-snapper so its points can still be dragged;
+ * only appending new points is switched off.
+ */
+let routeFinished = false
 let routeSnapperNetwork: FeatureCollection<LineString> | null = null
+/**
+ * The mode the user picked. route-snapper keeps its own snap flag and flips it on
+ * every drag, so the app has to own this and push it back into WASM.
+ */
+let drawMode: RouteDrawMode = 'snapped'
 
 /** Matches route-snapper-ts hover/click radius. */
 const SNAP_DISTANCE_PIXELS = 30
 
-/** Convert a freehand end to a graph node when S re-enables snapping. */
-const SNAP_CONVERT_METERS = 40
-
 export function setActiveRouteTool(tool: RouteTool | null) {
   activeRouteTool = tool
-  if (!tool) {
-    lastPointerLonLat = null
-    inactiveRouteWaypoints = null
-  }
+  routeFinished = false
+  if (!tool) lastPointerLonLat = null
 }
 
 export function setRouteSnapperNetwork(network: FeatureCollection<LineString> | null) {
   routeSnapperNetwork = network
+}
+
+/**
+ * route-snapper draws the stretch it would append next just like a confirmed one, so the
+ * decorator needs its waypoints to tell them apart.
+ */
+function decorateForRender(routeTool: RouteTool, geojson: FeatureCollection) {
+  return decorateRouteToolGeoJson(
+    geojson,
+    routeFinished ? null : lastPointerLonLat,
+    routeSnapperNetwork,
+    readWaypoints(routeTool),
+  )
+}
+
+function readConfirmedSegments(routeTool: RouteTool) {
+  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection
+  return normalizeRouteToolGeoJson(decorateForRender(routeTool, geojson))
 }
 
 function syncRouteToolRender(routeTool: RouteTool) {
@@ -66,6 +90,12 @@ function syncRouteToolRender(routeTool: RouteTool) {
 function readWasmSnapMode(routeTool: RouteTool): boolean {
   const geojson = JSON.parse(routeTool.inner.renderGeojson()) as { snap_mode?: boolean }
   return geojson.snap_mode === true
+}
+
+/** route-snapper reports the grab cursor for as long as a point is being dragged. */
+function isDraggingWaypoint(routeTool: RouteTool): boolean {
+  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as { cursor?: string }
+  return geojson.cursor === 'grabbing'
 }
 
 /** Confirmed waypoints from the live tool (works mid-draw). */
@@ -101,11 +131,15 @@ function lastWaypointLonLat(routeTool: RouteTool): [number, number] | null {
   return last ? [last.lon, last.lat] : null
 }
 
-function snapRadiusMeters(routeTool: RouteTool, lonLat: [number, number]) {
+function pixelsInMeters(routeTool: RouteTool, lonLat: [number, number], pixels: number) {
   const point = routeTool.map.project({ lng: lonLat[0], lat: lonLat[1] })
   return routeTool.map
     .unproject(point)
-    .distanceTo(routeTool.map.unproject([point.x - SNAP_DISTANCE_PIXELS, point.y]))
+    .distanceTo(routeTool.map.unproject([point.x - pixels, point.y]))
+}
+
+function snapRadiusMeters(routeTool: RouteTool, lonLat: [number, number]) {
+  return pixelsInMeters(routeTool, lonLat, SNAP_DISTANCE_PIXELS)
 }
 
 function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
@@ -113,10 +147,14 @@ function applyPointer(routeTool: RouteTool, lonLat: [number, number] | null) {
   routeTool.inner.onMouseMove(lonLat[0], lonLat[1], snapRadiusMeters(routeTool, lonLat))
 }
 
+/**
+ * `extend_route` is what separates drawing from editing: with it off route-snapper stops
+ * previewing a next point and only hovers points already on the route, so they stay draggable.
+ */
 function restoreExtendRoute(routeTool: RouteTool) {
   routeTool.setRouteConfig({
     avoid_doubling_back: false,
-    extend_route: true,
+    extend_route: !routeFinished,
   })
 }
 
@@ -149,51 +187,71 @@ function nearestSnappableNode(routeTool: RouteTool, lon: number, lat: number) {
 }
 
 /**
- * WASM only pathfinds between consecutive snapped waypoints. If the last click was
- * freehand but landed on the network, mark it snapped so the current line can follow roads.
+ * Fold a point that was dropped onto its neighbour into that neighbour.
+ *
+ * "On top of each other" is what the user sees, so the distance follows the drawn waypoint
+ * circle — capped, because at low zoom that circle covers far more ground than a drop gesture.
  */
-function convertLastFreeIfOnNetwork(routeTool: RouteTool) {
+function mergeDroppedWaypoint(routeTool: RouteTool) {
   const waypoints = readWaypoints(routeTool)
-  const last = waypoints.at(-1)
-  if (!last || last.snapped) {
-    return { converted: false, dist: null as number | null }
-  }
+  const anchor = lastPointerLonLat ?? lastWaypointLonLat(routeTool)
+  if (waypoints.length < 2 || !anchor) return
 
-  const nearest = nearestSnappableNode(routeTool, last.lon, last.lat)
-  if (!nearest || nearest.dist > SNAP_CONVERT_METERS) {
-    return { converted: false, dist: nearest?.dist ?? null }
-  }
-
-  const next = waypoints.map((waypoint, index) =>
-    index === waypoints.length - 1
-      ? { lon: nearest.lon, lat: nearest.lat, snapped: true }
-      : waypoint,
+  const merged = mergeAdjacentWaypoints(
+    waypoints,
+    Math.min(pixelsInMeters(routeTool, anchor, ROUTE_WAYPOINT_RADIUS_PX), ROAD_SNAP_RADIUS_METERS),
   )
-  routeTool.inner.editExisting(next)
+  if (merged.length === waypoints.length) return
+
+  routeTool.inner.editExisting(merged)
   restoreExtendRoute(routeTool)
-  return { converted: true, dist: nearest.dist }
+  applyPointer(routeTool, lastPointerLonLat)
+}
+
+/** Resolve the graph node a freehand route end can continue snapping from. */
+function snapEndAnchor(routeTool: RouteTool, waypoints: RouteWaypoint[]): SnapEndResult {
+  const last = waypoints.at(-1)
+  if (!last || last.snapped) return { waypoints, change: 'none' }
+  return withSnappedEnd(waypoints, nearestSnappableNode(routeTool, last.lon, last.lat))
+}
+
+/**
+ * Hand a freehand end that stopped on a graph node over to snapping right away, so the preview
+ * line already shows the road the next click will follow. An end further from the graph needs a
+ * bridge waypoint, which we only add once the user actually clicks.
+ */
+function snapRouteEndOnRoad(routeTool: RouteTool) {
+  const anchored = snapEndAnchor(routeTool, readWaypoints(routeTool))
+  if (anchored.change !== 'moved') return
+  routeTool.inner.editExisting(anchored.waypoints)
+  restoreExtendRoute(routeTool)
+}
+
+/** Toggle the WASM snap flag until it agrees with {@link drawMode}. */
+function applyDrawModeToWasm(routeTool: RouteTool) {
+  const wantSnapped = drawMode === 'snapped'
+  const pointer = () => lastPointerLonLat ?? lastWaypointLonLat(routeTool)
+  applyPointer(routeTool, pointer())
+  if (readWasmSnapMode(routeTool) !== wantSnapped) {
+    routeTool.toggleSnapMode()
+  }
+  // Entering snap mode fails while the cursor is not on a node yet, so try once more.
+  if (readWasmSnapMode(routeTool) !== wantSnapped) {
+    applyPointer(routeTool, pointer())
+    routeTool.toggleSnapMode()
+  }
+  applyPointer(routeTool, pointer())
 }
 
 function forceEnterSnapMode(routeTool: RouteTool) {
-  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
-  if (!readWasmSnapMode(routeTool)) {
-    routeTool.toggleSnapMode()
-  }
-  if (!readWasmSnapMode(routeTool)) {
-    applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
-    routeTool.toggleSnapMode()
-  }
-
-  convertLastFreeIfOnNetwork(routeTool)
+  applyDrawModeToWasm(routeTool)
+  snapRouteEndOnRoad(routeTool)
   applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
   syncRouteToolRender(routeTool)
 }
 
 function forceEnterFreehandMode(routeTool: RouteTool) {
-  if (readWasmSnapMode(routeTool)) {
-    routeTool.toggleSnapMode()
-  }
-  applyPointer(routeTool, lastPointerLonLat ?? lastWaypointLonLat(routeTool))
+  applyDrawModeToWasm(routeTool)
   syncRouteToolRender(routeTool)
 }
 
@@ -212,11 +270,14 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
   const pointer = lastPointerLonLat
   const hover = readHoveredPoint(routeTool)
   const waypoints = readWaypoints(routeTool)
-  const stayFreehand = !getRouteSnapMode()
+  const stayFreehand = drawMode === 'freehand'
 
+  // route-snapper also marks the point it would add next as hovered. Hand the click over
+  // only for a point that is already part of the route, where clicking removes it again.
   if (
     hover &&
     (hover.type === 'snapped-waypoint' || hover.type === 'free-waypoint') &&
+    isNearExistingWaypoint(waypoints, hover.lon, hover.lat) &&
     pointer &&
     haversineMeters(pointer[1], pointer[0], hover.lat, hover.lon) <= ROAD_SNAP_RADIUS_METERS
   ) {
@@ -230,9 +291,7 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
   }
 
   const [clickLon, clickLat] = pointer
-  const confirmed = normalizeRouteToolGeoJson(
-    JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection,
-  )
+  const confirmed = readConfirmedSegments(routeTool)
   const onDrawnRoute = insertIndexAlongSegments(
     confirmed.map((segment) => segment.coordinates),
     clickLon,
@@ -272,29 +331,36 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
     return
   }
 
-  if (onRoad) {
-    if (isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
+  if (stayFreehand) {
+    // A freehand click within 5 m of a road sticks to it, so snapping can pick up there later.
+    if (!onRoad || isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
       originalOnClick()
       return
     }
-    if (stayFreehand) {
-      commitWaypoints(
-        routeTool,
-        [...waypoints, { lon: onRoad.lon, lat: onRoad.lat, snapped: false }],
-        true,
-      )
-      return
-    }
-    routeTool.addSnappedWaypoint([onRoad.lon, onRoad.lat])
-    restoreExtendRoute(routeTool)
-    applyPointer(routeTool, pointer)
+    commitWaypoints(
+      routeTool,
+      [...waypoints, { lon: onRoad.lon, lat: onRoad.lat, snapped: false }],
+      true,
+    )
     return
   }
 
-  if (stayFreehand) {
+  // Snapped clicks only land on the network.
+  if (!onRoad) return
+  if (isNearExistingWaypoint(waypoints, onRoad.lon, onRoad.lat)) {
     originalOnClick()
     return
   }
+
+  const anchored = snapEndAnchor(routeTool, waypoints)
+  if (anchored.change !== 'none') {
+    routeTool.inner.editExisting(anchored.waypoints)
+    restoreExtendRoute(routeTool)
+  }
+  routeTool.addSnappedWaypoint([onRoad.lon, onRoad.lat])
+  restoreExtendRoute(routeTool)
+  applyPointer(routeTool, pointer)
+  syncRouteToolRender(routeTool)
 }
 
 /**
@@ -305,19 +371,19 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
 export function configureRouteToolInteractions(routeTool: RouteTool) {
   restoreExtendRoute(routeTool)
 
+  // Every redraw would otherwise publish the WASM snap flag, which a drag silently rewrites.
+  const originalSnapModeSet = routeTool.snapMode.set.bind(routeTool.snapMode)
+  routeTool.snapMode.set = () => {
+    originalSnapModeSet(drawMode === 'snapped')
+  }
+
   const originalGjSet = routeTool.routeToolGj.set.bind(routeTool.routeToolGj)
   routeTool.routeToolGj.set = (geojson) => {
     if (geojson.type !== 'FeatureCollection') {
       originalGjSet(geojson)
       return
     }
-    originalGjSet(
-      decorateRouteToolGeoJson(
-        geojson,
-        routeTool.active ? lastPointerLonLat : null,
-        routeSnapperNetwork,
-      ),
-    )
+    originalGjSet(decorateForRender(routeTool, geojson))
   }
 
   document.removeEventListener('keypress', routeTool.onKeyPress)
@@ -335,7 +401,7 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
 
   routeTool.map.off('dblclick', routeTool.onDoubleClick)
   routeTool.onDoubleClick = (event: MapMouseEvent) => {
-    if (!routeTool.active) return
+    if (!routeTool.active || routeFinished) return
     event.preventDefault()
     // Double-click is [click, click, dblclick]. Undo the extra click so the
     // last vertex is the finish location, then leave drawing mode.
@@ -349,22 +415,40 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.onMouseMove = (event: MapMouseEvent) => {
     lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
     originalMouseMove(event)
-    if (!routeTool.active) {
-      updateInactiveCursor(routeTool)
-      return
-    }
-    if (!routeSnapperNetwork) return
+    // A finished route has no snap preview to follow the cursor; route-snapper's own
+    // redraw already switches the cursor over the points that stay draggable.
+    if (!routeTool.active || routeFinished || !routeSnapperNetwork) return
     const onRoad = nearestPointOnLines(routeSnapperNetwork, event.lngLat.lng, event.lngLat.lat)
     if (onRoad) syncRouteToolRender(routeTool)
   }
   routeTool.map.on('mousemove', routeTool.onMouseMove)
 
+  // Dragging a waypoint puts route-snapper into the mode of the point being dragged.
+  // Restore the mode the user picked so the next click still draws what the sidebar says.
+  const originalMouseUp = routeTool.onMouseUp.bind(routeTool)
+  routeTool.map.off('mouseup', routeTool.onMouseUp)
+  routeTool.onMouseUp = () => {
+    const dropped = isDraggingWaypoint(routeTool)
+    originalMouseUp()
+    if (!routeTool.active) return
+    if (dropped) mergeDroppedWaypoint(routeTool)
+    // route-snapper leaves the grab cursor behind because it does not redraw here.
+    if (routeFinished || readWasmSnapMode(routeTool) === (drawMode === 'snapped')) {
+      syncRouteToolRender(routeTool)
+      return
+    }
+    applyDrawModeToWasm(routeTool)
+    syncRouteToolRender(routeTool)
+  }
+  routeTool.map.on('mouseup', routeTool.onMouseUp)
+
   const originalOnClick = routeTool.onClick.bind(routeTool)
   routeTool.map.off('click', routeTool.onClick)
   routeTool.onClick = (event?: MapMouseEvent) => {
     if (event?.lngLat) lastPointerLonLat = [event.lngLat.lng, event.lngLat.lat]
-    if (!routeTool.active) {
-      tryResumeFromEndpoint(routeTool)
+    if (!routeTool.active) return
+    if (routeFinished) {
+      handleFinishedClick(routeTool, originalOnClick)
       return
     }
     handleRouteClick(routeTool, originalOnClick)
@@ -373,23 +457,16 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
 }
 
 export function toggleDrawThroughMode() {
-  const routeTool = activeRouteTool
-  if (!routeTool?.active) return
-
-  const uiSnap = getRouteSnapMode()
-  const lastIsFree = readWaypoints(routeTool).at(-1)?.snapped === false
-  const nextMode: RouteDrawMode = uiSnap && lastIsFree ? 'snapped' : uiSnap ? 'freehand' : 'snapped'
-
-  if (uiSnap && lastIsFree) {
-    setRouteDrawMode('snapped')
-    return
-  }
-  setRouteDrawMode(nextMode)
+  setRouteDrawMode(drawMode === 'snapped' ? 'freehand' : 'snapped')
 }
 
 export function setRouteDrawMode(mode: RouteDrawMode) {
+  drawMode = mode
+  setRouteSnapModeState(mode === 'snapped')
+
+  // A finished route picks the mode up again when drawing resumes from one of its ends.
   const routeTool = activeRouteTool
-  if (!routeTool?.active) return
+  if (!routeTool?.active || routeFinished) return
   if (mode === 'snapped') {
     forceEnterSnapMode(routeTool)
     return
@@ -397,81 +474,76 @@ export function setRouteDrawMode(mode: RouteDrawMode) {
   forceEnterFreehandMode(routeTool)
 }
 
-function stripHoverPreview(geojson: FeatureCollection): FeatureCollection {
-  const hoveredEnds = new Set<string>()
-  for (const feature of geojson.features) {
-    if (feature.geometry?.type !== 'Point') continue
-    if (!feature.properties?.hovered) continue
-    const [lng, lat] = feature.geometry.coordinates
-    if (typeof lng === 'number' && typeof lat === 'number') {
-      hoveredEnds.add(`${lng},${lat}`)
-    }
-  }
-  return {
-    type: 'FeatureCollection',
-    features: geojson.features.filter((feature) => {
-      if (feature.properties?.hovered) return false
-      if (feature.properties?.type === 'snap-preview') return false
-      if (feature.geometry?.type !== 'LineString') return true
-      const end = feature.geometry.coordinates.at(-1)
-      if (!end) return true
-      return !hoveredEnds.has(`${end[0]},${end[1]}`)
-    }),
-  }
+/**
+ * A fresh or reloaded tool always starts out snapping, so push the picked mode back in
+ * after the graph was rebuilt or a shared route was restored.
+ */
+export function syncRouteDrawMode() {
+  const routeTool = activeRouteTool
+  if (!routeTool?.active || routeFinished) return
+  applyDrawModeToWasm(routeTool)
+  syncRouteToolRender(routeTool)
 }
 
-/** Confirm the route and leave drawing mode. Geometry stays on the map. */
+/**
+ * Confirm the route: it stops growing, but stays loaded so every point can still be dragged
+ * and either end can pick drawing up again. `editExisting` re-seeds the same waypoints to drop
+ * the half-drawn stretch that was following the cursor.
+ */
 export function finishActiveRoute() {
   const routeTool = activeRouteTool
-  if (!routeTool?.active) return
-  inactiveRouteWaypoints = readWaypoints(routeTool)
-  const confirmed = stripHoverPreview(
-    JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection,
-  )
-  routeTool.active = false
-  routeTool.inner.clearState()
-  routeTool.routeToolGj.set(confirmed)
-  routeTool.undoLength.set(0)
-  routeTool.map.getCanvas().style.cursor = ''
+  if (!routeTool?.active || routeFinished) return
+  const waypoints = readWaypoints(routeTool)
+  if (waypoints.length < 2) return
+
+  routeFinished = true
+  routeTool.inner.editExisting(waypoints)
+  restoreExtendRoute(routeTool)
+  applyPointer(routeTool, lastPointerLonLat)
+  syncRouteToolRender(routeTool)
   routeTool.map.boxZoom.enable()
   routeTool.map.doubleClickZoom.enable()
 }
 
-function updateInactiveCursor(routeTool: RouteTool) {
-  const pointer = lastPointerLonLat
-  if (!pointer || !inactiveRouteWaypoints?.length) {
-    routeTool.map.getCanvas().style.cursor = ''
-    return
-  }
-  const end = pickRouteEndToResume(
-    inactiveRouteWaypoints,
-    pointer[0],
-    pointer[1],
-    snapRadiusMeters(routeTool, pointer),
-  )
-  routeTool.map.getCanvas().style.cursor = end ? 'pointer' : ''
+/**
+ * A finished route takes two kinds of click: its ends pick drawing up again, and any other
+ * point on it is deleted. route-snapper only ever hovers points that are on the route while
+ * the route is finished, so a click anywhere else is a no-op.
+ */
+function handleFinishedClick(routeTool: RouteTool, originalOnClick: () => void) {
+  if (tryResumeFromEndpoint(routeTool)) return
+  originalOnClick()
+  // One point left is a route being drawn again, not a finished one.
+  if (readWaypoints(routeTool).length >= 2) return
+  routeFinished = false
+  restoreExtendRoute(routeTool)
+  syncRouteToolRender(routeTool)
 }
 
 function tryResumeFromEndpoint(routeTool: RouteTool) {
-  const waypoints = inactiveRouteWaypoints
   const pointer = lastPointerLonLat
-  if (!waypoints?.length || !pointer) return
+  if (!pointer) return false
+  const waypoints = readWaypoints(routeTool)
+  if (waypoints.length === 0) return false
   const end = pickRouteEndToResume(
     waypoints,
     pointer[0],
     pointer[1],
     snapRadiusMeters(routeTool, pointer),
   )
-  if (!end) return
+  if (!end) return false
   resumeActiveRoute(routeTool, waypointsStartingFromEnd(waypoints, end))
+  return true
 }
 
 function resumeActiveRoute(routeTool: RouteTool, waypoints: RouteWaypoint[]) {
-  inactiveRouteWaypoints = null
-  routeTool.startRoute()
+  routeFinished = false
+  // Resuming from the start means drawing on a reversed route, so re-seed the waypoints.
   routeTool.inner.editExisting(waypoints)
   restoreExtendRoute(routeTool)
-  if (getRouteSnapMode()) {
+  routeTool.map.boxZoom.disable()
+  routeTool.map.doubleClickZoom.disable()
+  if (drawMode === 'snapped') {
     forceEnterSnapMode(routeTool)
     return
   }
@@ -483,7 +555,7 @@ export function undoRouteEdit() {
 }
 
 export function clearActiveRoute() {
-  inactiveRouteWaypoints = null
+  routeFinished = false
   if (!activeRouteTool) {
     clearRouteState()
     return
@@ -491,5 +563,6 @@ export function clearActiveRoute() {
   activeRouteTool.stop()
   clearRouteState()
   activeRouteTool.startRoute()
+  applyDrawModeToWasm(activeRouteTool)
   syncRouteToolRender(activeRouteTool)
 }

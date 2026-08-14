@@ -104,6 +104,49 @@ describe('decorateRouteToolGeoJson', () => {
     expect(indexAt(13.003, 52)).toBeUndefined()
   })
 
+  it('marks the rubber band but keeps a stretch that ends on a hovered waypoint', () => {
+    const waypoints = [
+      { lon: 13, lat: 52 },
+      { lon: 13.001, lat: 52 },
+    ]
+    const geojson: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [13, 52],
+              [13.001, 52],
+            ],
+          },
+          properties: { snapped: true },
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [13.001, 52],
+              [13.002, 52],
+            ],
+          },
+          properties: { snapped: true },
+        },
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [13.001, 52] },
+          properties: { type: 'snapped-waypoint', hovered: true },
+        },
+      ],
+    }
+
+    const decorated = decorateRouteToolGeoJson(geojson, null, null, waypoints)
+    expect(decorated.features[0]?.properties?.preview).toBeUndefined()
+    expect(decorated.features[1]?.properties?.preview).toBe(true)
+  })
+
   it('adds a mid-edge preview on the nearest road within 5 m', () => {
     const network: FeatureCollection<LineString> = {
       type: 'FeatureCollection',

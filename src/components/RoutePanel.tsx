@@ -153,7 +153,7 @@ export function RoutePanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          Double-click to finish. Click an endpoint to continue drawing.
+          Double-click to finish. Drag points to adjust, click an endpoint to keep drawing.
         </p>
 
         <button

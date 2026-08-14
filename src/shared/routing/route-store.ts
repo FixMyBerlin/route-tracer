@@ -60,8 +60,8 @@ export function useRouteActions() {
   return useRouteStore((state) => state.actions)
 }
 
-export function getRouteSnapMode() {
-  return useRouteStore.getState().snapMode
+export function setRouteSnapModeState(enabled: boolean) {
+  useRouteStore.getState().actions.setSnapMode(enabled)
 }
 
 export function clearRouteState() {

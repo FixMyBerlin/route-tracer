@@ -15,6 +15,7 @@ import {
   configureRouteToolInteractions,
   setActiveRouteTool,
   setRouteSnapperNetwork,
+  syncRouteDrawMode,
 } from '@/shared/routing/route-tool-controller'
 import {
   usePersistRouteSegments,
@@ -150,6 +151,7 @@ export function RouteSnapperHost() {
         ) {
           routeTool.startRoute()
         }
+        syncRouteDrawMode()
       })
 
       return () => {

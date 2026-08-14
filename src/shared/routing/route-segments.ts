@@ -1,12 +1,5 @@
 import simplify from '@turf/simplify'
-import type {
-  Feature,
-  FeatureCollection,
-  GeoJsonProperties,
-  LineString,
-  Point,
-  Position,
-} from 'geojson'
+import type { Feature, FeatureCollection, GeoJsonProperties, LineString, Position } from 'geojson'
 import type { RouteProps } from 'route-snapper-ts'
 
 export type SegmentKind = 'snapped' | 'manual'
@@ -37,40 +30,22 @@ function roundPosition(position: Position): Position {
   return [roundCoord(lng), roundCoord(lat)]
 }
 
-function positionKey(position: Position): string {
-  const [lng, lat] = roundPosition(position)
-  return `${lng},${lat}`
-}
-
 function isLineStringFeature(feature: Feature): feature is Feature<LineString, GeoJsonProperties> {
   return feature.geometry.type === 'LineString'
 }
 
-function isPointFeature(feature: Feature): feature is Feature<Point, GeoJsonProperties> {
-  return feature.geometry.type === 'Point'
-}
-
 /**
  * Extract snapped vs manual stretches from route-snapper's live GeoJSON.
- * Skips speculative rubber-band LineStrings that end on a hovered cursor point.
+ * Skips the speculative rubber band, which `decorateRouteToolGeoJson` marks as `preview`.
  */
 export function normalizeRouteToolGeoJson(collection: FeatureCollection): RouteSegment[] {
-  const hoveredEnds = new Set<string>()
-  for (const feature of collection.features) {
-    if (!isPointFeature(feature)) continue
-    if (!feature.properties?.hovered) continue
-    hoveredEnds.add(positionKey(feature.geometry.coordinates))
-  }
-
   const segments: RouteSegment[] = []
 
   for (const feature of collection.features) {
     if (!isLineStringFeature(feature)) continue
     if (typeof feature.properties?.snapped !== 'boolean') continue
+    if (feature.properties.preview === true) continue
     if (feature.geometry.coordinates.length < 2) continue
-
-    const end = feature.geometry.coordinates.at(-1)
-    if (end && hoveredEnds.has(positionKey(end))) continue
 
     segments.push({
       segment_index: segments.length,

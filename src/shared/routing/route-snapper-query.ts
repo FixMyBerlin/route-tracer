@@ -1,5 +1,9 @@
 import { emptyParsedOsmData } from '@osm-editor-kit/osm-data'
-import { countRoadWays, createRouteSnapperGraphApi } from '@osm-editor-kit/osm-route-snapper'
+import {
+  countRoadWays,
+  createRouteSnapperGraphApi,
+  parsedOsmWaysToFeatureCollection,
+} from '@osm-editor-kit/osm-route-snapper'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { densifyParsedOsmForSnapping } from '@/shared/routing/densify-osm-for-snapping'
@@ -19,11 +23,20 @@ function useCoverageGraph() {
 }
 
 const routeSnapperGraphApi = createRouteSnapperGraphApi({
-  getGraphKey: () => ['route-tracer', 'route-snapper-graph', 'densify-v3'] as const,
+  getGraphKey: () => ['route-tracer', 'route-snapper-graph', 'densify-v4'] as const,
   useCoverageGraph,
 })
 
 export const useRouteSnapperGraphQuery = routeSnapperGraphApi.createUseQuery()
+
+/**
+ * The ways as Overpass delivered them. The snapper's own copy is cut into single segments,
+ * so it no longer shows what OSM actually holds.
+ */
+export function useOverpassWaysGeoJson() {
+  const graph = useOsmCoverageQuery().data?.graph ?? emptyParsedOsmData()
+  return useMemo(() => parsedOsmWaysToFeatureCollection(graph), [graph])
+}
 
 /** Nodes the WASM snapper will actually attach to (`debugSnappableNodes`). */
 export function useSnappableNodesQuery() {

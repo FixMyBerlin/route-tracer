@@ -3,6 +3,7 @@ import { Route } from '@/routes/index'
 import { NETWORK_HIGHLIGHT_COLORS } from '@/shared/routing/constants'
 import { ROUTE_SNAPPED_LAYER_ID } from '@/shared/routing/route-layer-ids'
 import {
+  useOverpassWaysGeoJson,
   useRouteSnapperGraphQuery,
   useSnappableNodesQuery,
 } from '@/shared/routing/route-snapper-query'
@@ -32,9 +33,9 @@ export function NetworkHighlightLayers() {
   const mode = Route.useSearch({ select: (search) => search.network })
   const graph = useRouteSnapperGraphQuery()
   const snappableNodes = useSnappableNodesQuery()
+  const overpassWays = useOverpassWaysGeoJson()
 
-  const overpassData =
-    mode === 'overpass' ? (graph.data?.overpassWays ?? emptyCollection) : emptyCollection
+  const overpassData = mode === 'overpass' ? overpassWays : emptyCollection
   const routingData =
     mode === 'routing' ? (graph.data?.routingNetwork ?? emptyCollection) : emptyCollection
   const routingNodes =

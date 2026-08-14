@@ -1,9 +1,11 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
 import {
   ROUTE_LINE_WIDTH_PX,
+  ROUTE_NODE_RADIUS_PX,
   ROUTE_SEGMENT_COLORS,
   ROUTE_SNAPPED_LINE_OFFSET_PX,
   ROUTE_WAYPOINT_COLORS,
+  ROUTE_WAYPOINT_RADIUS_PX,
 } from '@/shared/routing/constants'
 import {
   ROUTE_MANUAL_LAYER_ID,
@@ -14,10 +16,6 @@ import {
   ROUTE_WAYPOINT_LAYER_ID,
 } from '@/shared/routing/route-layer-ids'
 import { useRouteToolGeoJson } from '@/shared/routing/route-store'
-
-/** Matches route-snapper demo sizing: waypoints larger than intermediate nodes. */
-const WAYPOINT_RADIUS_PX = 9
-const NODE_RADIUS_PX = 5
 
 /**
  * Declarative paint for route-snapper `renderGeojson()` output:
@@ -63,7 +61,12 @@ export function RouteToolLayers() {
         type="circle"
         filter={['all', ['==', ['geometry-type'], 'Point'], ['==', ['get', 'type'], 'node']]}
         paint={{
-          'circle-radius': ['case', ['has', 'hovered'], NODE_RADIUS_PX + 2, NODE_RADIUS_PX],
+          'circle-radius': [
+            'case',
+            ['has', 'hovered'],
+            ROUTE_NODE_RADIUS_PX + 2,
+            ROUTE_NODE_RADIUS_PX,
+          ],
           'circle-color': '#0f172a',
           'circle-stroke-color': '#f8fafc',
           'circle-stroke-width': 1.5,
@@ -84,7 +87,12 @@ export function RouteToolLayers() {
           ],
         ]}
         paint={{
-          'circle-radius': ['case', ['has', 'hovered'], WAYPOINT_RADIUS_PX + 2, WAYPOINT_RADIUS_PX],
+          'circle-radius': [
+            'case',
+            ['has', 'hovered'],
+            ROUTE_WAYPOINT_RADIUS_PX + 2,
+            ROUTE_WAYPOINT_RADIUS_PX,
+          ],
           'circle-color': [
             'match',
             ['get', 'kind'],

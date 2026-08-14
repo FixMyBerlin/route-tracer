@@ -28,3 +28,7 @@ export const ROUTE_WAYPOINT_COLORS = {
   edge: '#dc2626',
   mid: '#ea580c',
 } as const
+
+/** Matches route-snapper demo sizing: waypoints larger than intermediate nodes. */
+export const ROUTE_WAYPOINT_RADIUS_PX = 9
+export const ROUTE_NODE_RADIUS_PX = 5
