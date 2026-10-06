@@ -43,52 +43,52 @@ export function NetworkHighlightLayers() {
 
   return (
     <>
-      <Source id={OVERPASS_HIGHLIGHT_SOURCE_ID} type="geojson" data={overpassData}>
-        <Layer
-          id={OVERPASS_HIGHLIGHT_LAYER_ID}
-          type="line"
-          beforeId={ROUTE_SNAPPED_LAYER_ID}
-          layout={{
-            visibility: mode === 'overpass' ? 'visible' : 'none',
-            'line-cap': 'round',
-            'line-join': 'round',
-          }}
-          paint={{
-            'line-color': NETWORK_HIGHLIGHT_COLORS.overpass,
-            'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
-          }}
-        />
-      </Source>
-      <Source id={ROUTING_HIGHLIGHT_SOURCE_ID} type="geojson" data={routingData}>
-        <Layer
-          id={ROUTING_HIGHLIGHT_LAYER_ID}
-          type="line"
-          beforeId={ROUTE_SNAPPED_LAYER_ID}
-          layout={{
-            visibility: mode === 'routing' ? 'visible' : 'none',
-            'line-cap': 'round',
-            'line-join': 'round',
-          }}
-          paint={{
-            'line-color': NETWORK_HIGHLIGHT_COLORS.routing,
-            'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
-          }}
-        />
-      </Source>
-      <Source id={ROUTING_HIGHLIGHT_NODES_SOURCE_ID} type="geojson" data={routingNodes}>
-        <Layer
-          id={ROUTING_HIGHLIGHT_NODES_LAYER_ID}
-          type="circle"
-          beforeId={ROUTE_SNAPPED_LAYER_ID}
-          layout={{
-            visibility: mode === 'routing' ? 'visible' : 'none',
-          }}
-          paint={{
-            'circle-radius': ROUTING_SNAP_NODE_RADIUS_PX,
-            'circle-color': NETWORK_HIGHLIGHT_COLORS.routing,
-          }}
-        />
-      </Source>
+      <Source id={OVERPASS_HIGHLIGHT_SOURCE_ID} type="geojson" data={overpassData} />
+      <Layer
+        id={OVERPASS_HIGHLIGHT_LAYER_ID}
+        type="line"
+        source={OVERPASS_HIGHLIGHT_SOURCE_ID}
+        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        layout={{
+          visibility: mode === 'overpass' ? 'visible' : 'none',
+          'line-cap': 'round',
+          'line-join': 'round',
+        }}
+        paint={{
+          'line-color': NETWORK_HIGHLIGHT_COLORS.overpass,
+          'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
+        }}
+      />
+      <Source id={ROUTING_HIGHLIGHT_SOURCE_ID} type="geojson" data={routingData} />
+      <Layer
+        id={ROUTING_HIGHLIGHT_LAYER_ID}
+        type="line"
+        source={ROUTING_HIGHLIGHT_SOURCE_ID}
+        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        layout={{
+          visibility: mode === 'routing' ? 'visible' : 'none',
+          'line-cap': 'round',
+          'line-join': 'round',
+        }}
+        paint={{
+          'line-color': NETWORK_HIGHLIGHT_COLORS.routing,
+          'line-width': NETWORK_HIGHLIGHT_LINE_WIDTH,
+        }}
+      />
+      <Source id={ROUTING_HIGHLIGHT_NODES_SOURCE_ID} type="geojson" data={routingNodes} />
+      <Layer
+        id={ROUTING_HIGHLIGHT_NODES_LAYER_ID}
+        type="circle"
+        source={ROUTING_HIGHLIGHT_NODES_SOURCE_ID}
+        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        layout={{
+          visibility: mode === 'routing' ? 'visible' : 'none',
+        }}
+        paint={{
+          'circle-radius': ROUTING_SNAP_NODE_RADIUS_PX,
+          'circle-color': NETWORK_HIGHLIGHT_COLORS.routing,
+        }}
+      />
     </>
   )
 }

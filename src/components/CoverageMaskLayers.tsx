@@ -18,10 +18,16 @@ export function CoverageMaskLayers() {
   if (coverage.data == null) return null
 
   return (
-    <Source id={COVERAGE_MASK_SOURCE_ID} type="geojson" data={coverageUnloadedMask(coverage.data)}>
+    <>
+      <Source
+        id={COVERAGE_MASK_SOURCE_ID}
+        type="geojson"
+        data={coverageUnloadedMask(coverage.data)}
+      />
       <Layer
         id={COVERAGE_MASK_FILL_LAYER_ID}
         type="fill"
+        source={COVERAGE_MASK_SOURCE_ID}
         beforeId={ROUTE_SNAPPED_LAYER_ID}
         paint={{
           'fill-color': '#0f172a',
@@ -31,12 +37,13 @@ export function CoverageMaskLayers() {
       <Layer
         id={COVERAGE_MASK_LINE_LAYER_ID}
         type="line"
+        source={COVERAGE_MASK_SOURCE_ID}
         beforeId={ROUTE_SNAPPED_LAYER_ID}
         paint={{
           'line-color': '#1e293b',
           'line-width': 1,
         }}
       />
-    </Source>
+    </>
   )
 }

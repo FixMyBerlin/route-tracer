@@ -49,6 +49,9 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
         doubleClickZoom={false}
         style={{ width: '100%', height: '100%' }}
         attributionControl={false}
+        // Omitting this loads the RTL text plugin from a third-party CDN.
+        RTLTextPlugin={false}
+        cursor={referenceImageHandlers.cursor}
         interactiveLayerIds={referenceImageHandlers.interactiveLayerIds}
         onLoad={(event: MapLibreEvent) => {
           const map = event.target
@@ -57,18 +60,10 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
           exposeMainMapForDebugging(map)
           onZoomChange(map.getZoom())
         }}
-        onMouseDown={(event: MapLayerMouseEvent) => {
-          referenceImageHandlers.onMouseDown(event)
-        }}
-        onMouseMove={(event: MapLayerMouseEvent) => {
-          referenceImageHandlers.onMouseMove(event)
-        }}
-        onMouseUp={(event: MapLayerMouseEvent) => {
-          referenceImageHandlers.onMouseUp(event)
-        }}
-        onMouseLeave={(event: MapLayerMouseEvent) => {
-          referenceImageHandlers.onMouseLeave(event)
-        }}
+        onMouseDown={(event: MapLayerMouseEvent) => referenceImageHandlers.onMouseDown(event)}
+        onMouseMove={(event: MapLayerMouseEvent) => referenceImageHandlers.onMouseMove(event)}
+        onMouseUp={() => referenceImageHandlers.onMouseUp()}
+        onMouseLeave={() => referenceImageHandlers.onMouseLeave()}
         onMove={(event: ViewStateChangeEvent) => {
           onZoomChange(event.viewState.zoom)
         }}

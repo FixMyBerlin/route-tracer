@@ -25,10 +25,12 @@ export function RouteToolLayers() {
   const geojson = useRouteToolGeoJson()
 
   return (
-    <Source id={ROUTE_TOOL_SOURCE_ID} type="geojson" data={geojson}>
+    <>
+      <Source id={ROUTE_TOOL_SOURCE_ID} type="geojson" data={geojson} />
       <Layer
         id={ROUTE_SNAPPED_LAYER_ID}
         type="line"
+        source={ROUTE_TOOL_SOURCE_ID}
         filter={['all', ['==', ['geometry-type'], 'LineString'], ['==', ['get', 'snapped'], true]]}
         layout={{
           'line-cap': 'round',
@@ -43,6 +45,7 @@ export function RouteToolLayers() {
       <Layer
         id={ROUTE_MANUAL_LAYER_ID}
         type="line"
+        source={ROUTE_TOOL_SOURCE_ID}
         filter={['all', ['==', ['geometry-type'], 'LineString'], ['==', ['get', 'snapped'], false]]}
         layout={{
           'line-cap': 'round',
@@ -57,6 +60,7 @@ export function RouteToolLayers() {
       <Layer
         id={ROUTE_WAYPOINT_LAYER_ID}
         type="circle"
+        source={ROUTE_TOOL_SOURCE_ID}
         filter={[
           'all',
           ['==', ['geometry-type'], 'Point'],
@@ -96,6 +100,7 @@ export function RouteToolLayers() {
       <Layer
         id={ROUTE_WAYPOINT_LABEL_LAYER_ID}
         type="symbol"
+        source={ROUTE_TOOL_SOURCE_ID}
         filter={['all', ['==', ['geometry-type'], 'Point'], ['has', 'click_index']]}
         layout={{
           'text-field': ['to-string', ['get', 'click_index']],
@@ -113,6 +118,6 @@ export function RouteToolLayers() {
           'text-opacity': ['case', ['has', 'will_remove'], 1, ['has', 'hovered'], 0.55, 1],
         }}
       />
-    </Source>
+    </>
   )
 }
