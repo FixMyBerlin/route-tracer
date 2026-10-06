@@ -1,7 +1,7 @@
-import { useMapChromeOsmBusy } from '@/shared/map/map-chrome-store'
+import { useIsOsmCoverageFetching } from '@/shared/routing/osm-coverage-query'
 
 export function MapLoadingIndicator() {
-  const busy = useMapChromeOsmBusy()
+  const busy = useIsOsmCoverageFetching()
 
   if (!busy) return null
 

@@ -2,8 +2,9 @@ import { formatCoverageAgeHour } from '@osm-editor-kit/osm-coverage'
 import { formatDistanceStrict } from 'date-fns'
 import { useRef, useSyncExternalStore } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
+import { twJoin } from 'tailwind-merge'
 import { Route } from '@/routes/index'
-import { useMapViewEpoch, useOsmStorageReady } from '@/shared/map/map-chrome-store'
+import { useMapLoaded, useMapViewEpoch, useOsmStorageReady } from '@/shared/map/map-chrome-store'
 import { NETWORK_HIGHLIGHT_COLORS, viewMinZoom } from '@/shared/routing/constants'
 import { scheduleCoverageFromMap } from '@/shared/routing/map-helpers'
 import { useOsmCoverageFetch, useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
@@ -91,13 +92,15 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
     ? formatDistanceStrict(savedAtMs, nowMs)
     : null
   const { mainMap } = useMap()
-  const viewEpoch = useMapViewEpoch()
+  const mapLoaded = useMapLoaded()
+  // Subscribed only to re-render — and so re-read the bounds below — once the camera settles.
+  useMapViewEpoch()
   const storageReady = useOsmStorageReady()
-  const { loadOsmData, isFetching: coverageBusy } = useOsmCoverageFetch()
+  const { loadOsmData, isFetching: coverageBusy, error: loadError } = useOsmCoverageFetch()
   const reloadDialogRef = useRef<HTMLDialogElement>(null)
 
-  const mapLibre = mainMap?.getMap() ?? null
-  const fetchArgs = viewEpoch >= 0 && mapLibre ? scheduleCoverageFromMap(mapLibre) : null
+  const mapLibre = mapLoaded ? (mainMap?.getMap() ?? null) : null
+  const fetchArgs = mapLibre ? scheduleCoverageFromMap(mapLibre) : null
   const needsFetch =
     fetchArgs != null &&
     viewportNeedsOsmFetch(fetchArgs.bounds, coverage.data, fetchArgs.zoom, fetchArgs.mapSizePx)
@@ -108,6 +111,9 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
   if (coverageBusy || graphBuilding) {
     status = 'Loading OSM…'
     tone = 'loading'
+  } else if (loadError) {
+    status = `Loading OSM failed: ${loadError}`
+    tone = 'error'
   } else if (graphError) {
     status = `Routing graph failed: ${graphError}`
     tone = 'error'
@@ -135,12 +141,7 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
 
   async function loadViewport(options?: { force?: boolean; clearPersistedOnForce?: boolean }) {
     if (!mapLibre) return
-    const args = scheduleCoverageFromMap(mapLibre)
-    await loadOsmData(args.bounds, args.zoom, {
-      mapSizePx: args.mapSizePx,
-      force: options?.force,
-      clearPersistedOnForce: options?.clearPersistedOnForce,
-    })
+    await loadOsmData(scheduleCoverageFromMap(mapLibre), options)
   }
 
   function openReloadConfirm() {
@@ -158,9 +159,19 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-medium text-white">Network</h2>
-            {status ? <p className="mt-2 text-sm leading-tight text-slate-400">{status}</p> : null}
+            {status ? (
+              <p
+                className={twJoin(
+                  'mt-2 text-sm leading-tight',
+                  tone === 'error' ? 'text-amber-400' : 'text-slate-400',
+                )}
+                role={tone === 'error' ? 'alert' : undefined}
+              >
+                {status}
+              </p>
+            ) : null}
           </div>
-          {(tone === 'loading' || graphBuilding) && (
+          {tone === 'loading' && (
             <span
               aria-hidden
               className="mt-1 size-4 shrink-0 animate-spin rounded-full border-2 border-slate-600 border-t-sky-400"
@@ -251,9 +262,10 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
           <h2 className="text-sm font-medium text-white">OSM Data</h2>
           {ageLabel ? (
             <span
-              className={
-                cacheStale ? 'shrink-0 text-xs text-amber-400' : 'shrink-0 text-xs text-slate-400'
-              }
+              className={twJoin(
+                'shrink-0 text-xs',
+                cacheStale ? 'text-amber-400' : 'text-slate-400',
+              )}
             >
               from ~{ageLabel}
             </span>

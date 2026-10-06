@@ -11,14 +11,11 @@ import { useReferenceImageOverlay } from '@/components/ReferenceImageOverlay'
 import { RouteSnapperHost } from '@/components/RouteSnapperHost'
 import { RouteToolLayers } from '@/components/RouteToolLayers'
 import { ViewMinZoomOverlay } from '@/components/ViewMinZoomOverlay'
-import {
-  exposeCoverageLoaderForDebugging,
-  exposeMainMapForDebugging,
-} from '@/shared/map/expose-main-map'
+import { exposeMainMapForDebugging } from '@/shared/map/expose-main-map'
 import { useMapChromeActions } from '@/shared/map/map-chrome-store'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
-import { useRouteCoveragePace } from '@/shared/routing/use-route-coverage-pace'
+import { useRestoreOsmCoverage } from '@/shared/routing/use-restore-osm-coverage'
 import type { WorkflowStep } from '@/shared/routing/workflow-steps'
 
 type RouteTracerMapProps = {
@@ -32,7 +29,7 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
   const { updateSearch } = useIndexSearchNavigation()
   const tracing = step === 'tracing'
   const imageEditable = step === 'image'
-  const { loadCoverageNow } = useRouteCoveragePace()
+  useRestoreOsmCoverage()
   const { markMapLoaded, bumpViewEpoch } = useMapChromeActions()
   const { mapHandlers: referenceImageHandlers, layers: referenceImageLayers } =
     useReferenceImageOverlay({ editable: imageEditable })
@@ -58,9 +55,6 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
           markMapLoaded()
           bumpViewEpoch()
           exposeMainMapForDebugging(map)
-          exposeCoverageLoaderForDebugging((m) => {
-            void loadCoverageNow(m)
-          })
           onZoomChange(map.getZoom())
         }}
         onMouseDown={(event: MapLayerMouseEvent) => {

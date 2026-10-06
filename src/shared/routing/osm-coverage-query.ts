@@ -1,6 +1,8 @@
 import { createOsmCoverageApi } from '@osm-editor-kit/osm-coverage'
 import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { viewMinZoom } from '@/shared/routing/constants'
+import type { CoverageFetchArgs } from '@/shared/routing/map-helpers'
 import { createOsmCoverageIdbStorage } from '@/shared/routing/osm-coverage-idb'
 import { downloadOsmXmlCoverage } from '@/shared/routing/osm-xml'
 import { buildHighwaysOverpassUrl } from '@/shared/routing/overpass-highways'
@@ -14,54 +16,41 @@ const osmCoverageApi = createOsmCoverageApi({
   storage: createOsmCoverageIdbStorage(),
 })
 
-export type OsmCoverageQueryData = ReturnType<typeof osmCoverageApi.emptyData>
-
-export const osmCoverageSessionKey = osmCoverageApi.sessionKey
-export const emptyOsmCoverageData = osmCoverageApi.emptyData
-export const ensureOsmCoverage = osmCoverageApi.ensureCoverage
 export const restoreOsmCoverageSession = osmCoverageApi.restoreSession
 export const useOsmCoverageQuery = osmCoverageApi.createUseQuery(() => ({}))
 export const useIsOsmCoverageFetching = osmCoverageApi.createUseIsFetching(() => ({}))
 
+function describeLoadError(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Unknown error'
+  return message === 'Request failed with status code 429'
+    ? 'Too many OSM requests — try again soon'
+    : message
+}
+
+/** Manual viewport load. `error` holds the message of the last failed load. */
 export function useOsmCoverageFetch() {
   const queryClient = useQueryClient()
   const isFetching = useIsOsmCoverageFetching()
+  const [error, setError] = useState<string | null>(null)
 
   async function loadOsmData(
-    bounds: Parameters<typeof ensureOsmCoverage>[1]['bounds'],
-    zoom: number,
-    options?: {
-      force?: boolean
-      mapSizePx?: { width: number; height: number }
-      clearPersistedOnForce?: boolean
-    },
+    args: CoverageFetchArgs,
+    options?: { force?: boolean; clearPersistedOnForce?: boolean },
   ) {
-    if (zoom < viewMinZoom) return
+    if (args.zoom < viewMinZoom) return
 
-    const mapSizePx = options?.mapSizePx ?? { width: 1024, height: 768 }
-    const force = options?.force === true
-
+    setError(null)
     try {
-      await ensureOsmCoverage(queryClient, {
-        bounds,
-        zoom,
-        mapSizePx,
-        force,
+      await osmCoverageApi.ensureCoverage(queryClient, {
+        ...args,
+        force: options?.force === true,
         clearPersistedOnForce: options?.clearPersistedOnForce === true,
       })
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      console.error(
-        message === 'Request failed with status code 429'
-          ? 'Too many OSM requests — try again soon'
-          : message,
-        error,
-      )
+      console.error(error)
+      setError(describeLoadError(error))
     }
   }
 
-  return {
-    loadOsmData,
-    isFetching,
-  }
+  return { loadOsmData, isFetching, error }
 }
