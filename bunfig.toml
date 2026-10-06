@@ -1,4 +1,4 @@
-# @see .agents/skills/tech-stack/references/bun-install.md
+# @see skill `tech-stack` → references/bun-install.md
 
 [install]
 minimumReleaseAge = 432000
