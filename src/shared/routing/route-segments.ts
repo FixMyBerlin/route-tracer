@@ -1,6 +1,7 @@
 import simplify from '@turf/simplify'
 import type { Feature, FeatureCollection, GeoJsonProperties, LineString, Position } from 'geojson'
 import type { RouteProps } from 'route-snapper-ts'
+import { pathLengthMeters } from '@/shared/routing/haversine'
 
 export type SegmentKind = 'snapped' | 'manual'
 
@@ -57,7 +58,7 @@ export function normalizeRouteToolGeoJson(collection: FeatureCollection): RouteS
   return segments
 }
 
-export function mergeSegmentCoordinates(segmentCoords: Position[][]): Position[] {
+function mergeSegmentCoordinates(segmentCoords: Position[][]): Position[] {
   const merged: Position[] = []
 
   for (const coordinates of segmentCoords) {
@@ -83,7 +84,7 @@ export function segmentsToRouteFeature(
   if (coordinates.length < 2) return null
 
   const waypoints = segmentsToWaypoints(segments)
-  const lengthMeters = estimateLengthMeters(coordinates)
+  const lengthMeters = Math.round(pathLengthMeters(coordinates))
 
   return {
     type: 'Feature',
@@ -123,30 +124,6 @@ export function segmentsToWaypoints(segments: RouteSegment[]) {
   }
 
   return waypoints
-}
-
-function estimateLengthMeters(coordinates: Position[]) {
-  let length = 0
-  for (let index = 1; index < coordinates.length; index += 1) {
-    const previous = coordinates[index - 1]
-    const current = coordinates[index]
-    if (!previous || !current) continue
-    const [lng1, lat1] = previous
-    const [lng2, lat2] = current
-    length += haversineMeters(lat1 ?? 0, lng1 ?? 0, lat2 ?? 0, lng2 ?? 0)
-  }
-  return Math.round(length)
-}
-
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
-  const earthRadiusMeters = 6_371_000
-  const dLat = toRadians(lat2 - lat1)
-  const dLng = toRadians(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2
-  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
 }
 
 /** GeoJSON shape expected by route-snapper map layers (`snapped` property per LineString). */
@@ -193,7 +170,8 @@ export function buildRouteExportGeoJson(
   return simplify(collection, {
     tolerance: ROUTE_EXPORT_SIMPLIFY_TOLERANCE,
     highQuality: true,
-    mutate: true,
+    // Clone: the features share their coordinate arrays with the route store.
+    mutate: false,
   })
 }
 
@@ -209,5 +187,6 @@ export function downloadRouteGeoJson(
   anchor.href = url
   anchor.download = filename
   anchor.click()
-  URL.revokeObjectURL(url)
+  // Let the download start before releasing the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

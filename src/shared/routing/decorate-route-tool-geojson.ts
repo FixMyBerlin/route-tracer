@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection, LineString, Point, Position } from 'geojson'
 import { isOriginalOsmNode } from '@/shared/routing/densify-osm-for-snapping'
-import { haversineMeters, nearestPointOnLines } from '@/shared/routing/nearest-road-point'
+import { haversineMeters } from '@/shared/routing/haversine'
+import { nearestPointOnLines } from '@/shared/routing/nearest-road-point'
 import { normalizeRouteToolGeoJson, segmentsToWaypoints } from '@/shared/routing/route-segments'
 
 const WAYPOINT_TYPES = new Set(['snapped-waypoint', 'free-waypoint'])

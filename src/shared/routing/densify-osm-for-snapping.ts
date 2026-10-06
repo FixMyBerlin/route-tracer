@@ -1,4 +1,5 @@
 import type { OsmWay, ParsedOsmData } from '@osm-editor-kit/osm-data'
+import { haversineMeters } from '@/shared/routing/haversine'
 
 /** Insert extra OSM nodes so route-snapper can snap mid-block, not only at junctions. */
 const SNAP_NODE_SPACING_METERS = 5
@@ -7,17 +8,6 @@ const SNAP_NODE_SPACING_METERS = 5
 const COORD_KEY_DECIMALS = 6
 
 let lastOriginalOsmNodeKeys = new Set<string>()
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const toRad = (degrees: number) => (degrees * Math.PI) / 180
-  const earthRadiusMeters = 6_371_000
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
-}
 
 function osmNodeCoordKey(lon: number, lat: number) {
   return `${lon.toFixed(COORD_KEY_DECIMALS)},${lat.toFixed(COORD_KEY_DECIMALS)}`

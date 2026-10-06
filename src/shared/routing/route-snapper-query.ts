@@ -7,18 +7,17 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { densifyParsedOsmForSnapping } from '@/shared/routing/densify-osm-for-snapping'
-import {
-  emptyOsmCoverageData,
-  osmCoverageSessionKey,
-  useOsmCoverageQuery,
-} from '@/shared/routing/osm-coverage-query'
+import { useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
 import {
   emptyPointCollection,
   snappableNodesFromGraphBytes,
 } from '@/shared/routing/routing-network-snap-nodes'
 
+/** Stable identity, so the memos below hold while nothing is loaded yet. */
+const emptyGraph = emptyParsedOsmData()
+
 function useCoverageGraph() {
-  const graph = useOsmCoverageQuery().data?.graph ?? emptyParsedOsmData()
+  const graph = useOsmCoverageQuery().data?.graph ?? emptyGraph
   return useMemo(() => densifyParsedOsmForSnapping(graph), [graph])
 }
 
@@ -34,7 +33,7 @@ export const useRouteSnapperGraphQuery = routeSnapperGraphApi.createUseQuery()
  * so it no longer shows what OSM actually holds.
  */
 export function useOverpassWaysGeoJson() {
-  const graph = useOsmCoverageQuery().data?.graph ?? emptyParsedOsmData()
+  const graph = useOsmCoverageQuery().data?.graph ?? emptyGraph
   return useMemo(() => parsedOsmWaysToFeatureCollection(graph), [graph])
 }
 
@@ -57,7 +56,7 @@ export function useSnappableNodesQuery() {
 export function useRoutingReadiness() {
   const coverage = useOsmCoverageQuery()
   const graph = useRouteSnapperGraphQuery()
-  const wayCount = countRoadWays(coverage.data?.graph ?? emptyOsmCoverageData().graph)
+  const wayCount = countRoadWays(coverage.data?.graph ?? emptyGraph)
   const edgeCount = graph.data?.edgeCount ?? 0
 
   return {
@@ -67,10 +66,5 @@ export function useRoutingReadiness() {
     graphBuilding: graph.isFetching,
     graphError:
       graph.data?.lastError ?? (graph.error instanceof Error ? graph.error.message : null),
-    coverage,
-    graph,
   }
 }
-
-// Re-export for tests / cache invalidation if needed later.
-export { osmCoverageSessionKey }

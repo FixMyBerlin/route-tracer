@@ -1,4 +1,4 @@
-import { haversineMeters } from '@/shared/routing/nearest-road-point'
+import { haversineMeters } from '@/shared/routing/haversine'
 
 export type MergeableWaypoint = { lon: number; lat: number; snapped: boolean }
 

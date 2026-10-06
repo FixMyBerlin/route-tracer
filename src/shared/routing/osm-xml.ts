@@ -20,7 +20,7 @@ function readChangeset(element: Element) {
 }
 
 /** Parse Overpass / OSM API XML into ParsedOsmData. */
-export function parseOsmXml(xml: string): ParsedOsmData {
+function parseOsmXml(xml: string): ParsedOsmData {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   if (doc.querySelector('parsererror')) {
     throw new Error('Failed to parse OSM XML response')

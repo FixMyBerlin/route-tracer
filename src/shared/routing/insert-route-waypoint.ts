@@ -1,7 +1,7 @@
 import type { Position } from 'geojson'
+import { haversineMeters } from '@/shared/routing/haversine'
 import {
   ROAD_SNAP_RADIUS_METERS,
-  haversineMeters,
   linesFromCoordinates,
   nearestPointOnLines,
 } from '@/shared/routing/nearest-road-point'

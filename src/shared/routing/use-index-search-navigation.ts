@@ -7,11 +7,10 @@ type NavigateOptions = {
 }
 
 /**
- * Typed index-route search reads and writes.
+ * Typed index-route search writes. Read with `Route.useSearch({ select })`.
  * Pass parsed {@link IndexSearch} values — `routerSearch.stringify` encodes wire params.
  */
 export function useIndexSearchNavigation() {
-  const search = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   const updateSearch = (
@@ -39,5 +38,5 @@ export function useIndexSearchNavigation() {
     })
   }
 
-  return { search, updateSearch, navigate }
+  return { updateSearch }
 }

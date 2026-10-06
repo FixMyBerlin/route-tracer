@@ -3,6 +3,7 @@ import type { MapMouseEvent } from 'maplibre-gl'
 import type { RouteTool } from 'route-snapper-ts'
 import { ROUTE_WAYPOINT_RADIUS_PX } from '@/shared/routing/constants'
 import { decorateRouteToolGeoJson } from '@/shared/routing/decorate-route-tool-geojson'
+import { haversineMeters } from '@/shared/routing/haversine'
 import {
   indexOfNearestWaypoint,
   insertIndexAlongSegments,
@@ -10,11 +11,7 @@ import {
   removeWaypointAt,
 } from '@/shared/routing/insert-route-waypoint'
 import { mergeAdjacentWaypoints } from '@/shared/routing/merge-route-waypoints'
-import {
-  ROAD_SNAP_RADIUS_METERS,
-  haversineMeters,
-  nearestPointOnLines,
-} from '@/shared/routing/nearest-road-point'
+import { ROAD_SNAP_RADIUS_METERS, nearestPointOnLines } from '@/shared/routing/nearest-road-point'
 import { pickRouteEndToResume, waypointsStartingFromEnd } from '@/shared/routing/resume-route-end'
 import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
 import { clearRouteState, setRouteSnapModeState } from '@/shared/routing/route-store'
@@ -233,7 +230,7 @@ function removeExistingWaypoint(
   return true
 }
 
-function undoLastWaypointChange() {
+export function undoRouteEdit() {
   const routeTool = activeRouteTool
   if (!routeTool?.active) return
   const previous = waypointUndoStack.pop()
@@ -486,9 +483,7 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
     originalUndoLengthSet(waypointUndoStack.length)
   }
 
-  routeTool.undo = () => {
-    undoLastWaypointChange()
-  }
+  routeTool.undo = undoRouteEdit
 
   const originalGjSet = routeTool.routeToolGj.set.bind(routeTool.routeToolGj)
   routeTool.routeToolGj.set = (geojson) => {
@@ -600,7 +595,7 @@ export function syncRouteDrawMode() {
  * and either end can pick drawing up again. `editExisting` re-seeds the same waypoints to drop
  * the half-drawn stretch that was following the cursor.
  */
-export function finishActiveRoute() {
+function finishActiveRoute() {
   const routeTool = activeRouteTool
   if (!routeTool?.active || routeFinished) return
   const waypoints = readWaypoints(routeTool)
@@ -668,10 +663,6 @@ function resumeActiveRoute(routeTool: RouteTool, waypoints: RouteWaypoint[]) {
     return
   }
   forceEnterFreehandMode(routeTool)
-}
-
-export function undoRouteEdit() {
-  undoLastWaypointChange()
 }
 
 export function clearActiveRoute() {

@@ -5,7 +5,7 @@ const DB_VERSION = 1
 const STORE_NAME = 'images'
 
 /** Max age before prune removes a stored image (≈ 3 months). */
-export const REFERENCE_IMAGE_TTL_MS = 90 * 24 * 60 * 60 * 1000
+const REFERENCE_IMAGE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 
 export type ReferenceImageRecord = {
   id: string

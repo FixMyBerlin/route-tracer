@@ -1,38 +1,14 @@
 import { useState } from 'react'
+import { pathLengthMeters } from '@/shared/routing/haversine'
 import { downloadRouteGeoJson } from '@/shared/routing/route-segments'
 import { useRouteSegments } from '@/shared/routing/route-store'
-
-function segmentLengthMeters(coordinates: [number, number][]) {
-  let length = 0
-  for (let index = 1; index < coordinates.length; index += 1) {
-    const previous = coordinates[index - 1]
-    const current = coordinates[index]
-    if (!previous || !current) continue
-    const [lng1, lat1] = previous
-    const [lng2, lat2] = current
-    const toRadians = (degrees: number) => (degrees * Math.PI) / 180
-    const earthRadiusMeters = 6_371_000
-    const dLat = toRadians(lat2 - lat1)
-    const dLng = toRadians(lng2 - lng1)
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2
-    length += 2 * earthRadiusMeters * Math.asin(Math.sqrt(a))
-  }
-  return length
-}
 
 export function ExportPanel() {
   const segments = useRouteSegments()
   const [simplifyGeometry, setSimplifyGeometry] = useState(true)
 
-  const handleExport = () => {
-    if (segments.length === 0) return
-    downloadRouteGeoJson(segments, { simplify: simplifyGeometry })
-  }
-
   const totalMeters = segments.reduce(
-    (sum, segment) => sum + segmentLengthMeters(segment.coordinates as [number, number][]),
+    (sum, segment) => sum + pathLengthMeters(segment.coordinates),
     0,
   )
 
@@ -64,7 +40,7 @@ export function ExportPanel() {
         type="button"
         className="mt-3 w-full rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
         disabled={segments.length === 0}
-        onClick={handleExport}
+        onClick={() => downloadRouteGeoJson(segments, { simplify: simplifyGeometry })}
       >
         Download GeoJSON
       </button>

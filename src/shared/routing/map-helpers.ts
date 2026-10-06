@@ -1,7 +1,7 @@
 import type { MapBounds } from '@osm-editor-kit/osm-data'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 
-export function toBounds(mapBounds: {
+function toBounds(mapBounds: {
   getSouth: () => number
   getWest: () => number
   getNorth: () => number
@@ -15,7 +15,7 @@ export function toBounds(mapBounds: {
   }
 }
 
-export function getMapSizePx(map: { getContainer: () => HTMLElement }) {
+function getMapSizePx(map: { getContainer: () => HTMLElement }) {
   const container = map.getContainer()
   return {
     width: container.clientWidth,
