@@ -29,8 +29,8 @@ export function AppShell({ mapViewport }: AppShellProps) {
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <main
             className="relative min-h-0 min-w-0 flex-1"
-            onDragOver={step === 'image' ? preventDragOver : undefined}
-            onDrop={step === 'image' ? handleMapDrop : undefined}
+            onDragOver={preventDragOver}
+            onDrop={handleMapDrop}
           >
             <RouteTracerMap
               mapViewport={mapViewport}

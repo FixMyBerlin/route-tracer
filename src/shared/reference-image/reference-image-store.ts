@@ -1,17 +1,16 @@
 import { create } from 'zustand'
-import { isImageFile, loadImageBlob, loadImageFile } from './load-image-file'
+import { loadImageBlob } from './load-image-file'
 
-export type ReferenceImageRestoreStatus = 'idle' | 'pending' | 'ready' | 'missing'
+type ReferenceImageRestoreStatus = 'idle' | 'pending' | 'ready' | 'missing'
 
 interface ReferenceImageStore {
-  imageBitmap: ImageBitmap | null
   objectUrl: string | null
   width: number
   height: number
   locked: boolean
   restoreStatus: ReferenceImageRestoreStatus
   actions: {
-    setImageFile: (file: File) => Promise<boolean>
+    /** Resolves `false` and keeps the current image when the blob cannot be decoded. */
     setImageBlob: (blob: Blob) => Promise<boolean>
     clearImage: () => void
     setLocked: (locked: boolean) => void
@@ -19,74 +18,34 @@ interface ReferenceImageStore {
   }
 }
 
-function revokeCurrentImage(state: Pick<ReferenceImageStore, 'objectUrl' | 'imageBitmap'>) {
-  if (state.objectUrl) URL.revokeObjectURL(state.objectUrl)
-  state.imageBitmap?.close()
-}
-
 const useReferenceImageStore = create<ReferenceImageStore>()((set, get) => ({
-  imageBitmap: null,
   objectUrl: null,
   width: 0,
   height: 0,
   locked: false,
   restoreStatus: 'idle',
   actions: {
-    setImageFile: async (file) => {
-      if (!isImageFile(file)) return false
-
-      revokeCurrentImage(get())
-
-      try {
-        const loaded = await loadImageFile(file)
-        set({
-          imageBitmap: loaded.bitmap,
-          objectUrl: loaded.objectUrl,
-          width: loaded.width,
-          height: loaded.height,
-          locked: false,
-          restoreStatus: 'ready',
-        })
-        return true
-      } catch {
-        return false
-      }
-    },
     setImageBlob: async (blob) => {
-      revokeCurrentImage(get())
-
       try {
         const loaded = await loadImageBlob(blob)
-        set({
-          imageBitmap: loaded.bitmap,
-          objectUrl: loaded.objectUrl,
-          width: loaded.width,
-          height: loaded.height,
-          locked: false,
-          restoreStatus: 'ready',
-        })
+        // Release the previous image only now, so a failed load leaves it on the map.
+        const previousUrl = get().objectUrl
+        if (previousUrl) URL.revokeObjectURL(previousUrl)
+        set({ ...loaded, locked: false, restoreStatus: 'ready' })
         return true
       } catch {
         return false
       }
     },
     clearImage: () => {
-      revokeCurrentImage(get())
-      set({
-        imageBitmap: null,
-        objectUrl: null,
-        width: 0,
-        height: 0,
-        locked: false,
-        restoreStatus: 'idle',
-      })
+      const previousUrl = get().objectUrl
+      if (previousUrl) URL.revokeObjectURL(previousUrl)
+      set({ objectUrl: null, width: 0, height: 0, locked: false, restoreStatus: 'idle' })
     },
     setLocked: (locked) => set({ locked }),
     setRestoreStatus: (restoreStatus) => set({ restoreStatus }),
   },
 }))
-
-export const useReferenceImageBitmap = () => useReferenceImageStore((state) => state.imageBitmap)
 
 export const useReferenceImageObjectUrl = () => useReferenceImageStore((state) => state.objectUrl)
 
@@ -97,7 +56,7 @@ export const useReferenceImageAspectRatio = () => {
 }
 
 export const useHasReferenceImage = () =>
-  useReferenceImageStore((state) => state.imageBitmap !== null)
+  useReferenceImageStore((state) => state.objectUrl !== null)
 
 export const useReferenceImageLocked = () => useReferenceImageStore((state) => state.locked)
 

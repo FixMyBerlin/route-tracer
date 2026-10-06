@@ -1,7 +1,7 @@
 import { useDebouncedCallback } from '@tanstack/react-pacer'
 import { useRef, useState } from 'react'
+import { twJoin } from 'tailwind-merge'
 import { Route } from '@/routes/index'
-import { cn } from '@/shared/cn'
 import { deleteReferenceImage } from '@/shared/reference-image/reference-image-idb'
 import {
   useHasReferenceImage,
@@ -14,11 +14,6 @@ import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navi
 
 type ReferenceImagePanelProps = {
   onImageFile: (file: File) => Promise<boolean>
-}
-
-type ImageSourceFieldProps = {
-  imageSource: string
-  onPersist: (value: string) => void
 }
 
 function isHttpUrl(value: string): boolean {
@@ -52,27 +47,6 @@ function ImageSourceHint({ imageSource }: { imageSource: string }) {
   )
 }
 
-function ImageSourceField({ imageSource, onPersist }: ImageSourceFieldProps) {
-  const [draft, setDraft] = useState(imageSource)
-
-  return (
-    <input
-      type="url"
-      inputMode="url"
-      autoComplete="off"
-      spellCheck={false}
-      placeholder="https://…"
-      value={draft}
-      onChange={(event) => {
-        const nextValue = event.target.value
-        setDraft(nextValue)
-        onPersist(nextValue)
-      }}
-      className="mt-3 w-full border-b border-slate-700 bg-transparent py-2 text-sm text-slate-400 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none"
-    />
-  )
-}
-
 export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
   const { updateSearch } = useIndexSearchNavigation()
   const overlay = Route.useSearch({ select: (search) => search.overlay })
@@ -90,7 +64,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
       const trimmed = value.trim()
       updateSearch({ imageSource: trimmed || undefined })
     },
-    { wait: 400 },
+    { wait: 400, onUnmount: (debouncer) => debouncer.flush() },
   )
 
   const opacityPercent = Math.round((overlay?.opacity ?? DEFAULT_OVERLAY_OPACITY) * 100)
@@ -103,10 +77,10 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
   }
 
   const handleClear = () => {
-    const idToDelete = imageId
     clearImage()
     updateSearch({ overlay: undefined, imageId: undefined })
-    if (idToDelete) void deleteReferenceImage(idToDelete)
+    // Best effort: a record that stays behind is pruned once it expires.
+    if (imageId) deleteReferenceImage(imageId).catch(() => undefined)
   }
 
   const handleDrop = async (event: React.DragEvent<HTMLElement>) => {
@@ -138,7 +112,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
       </p>
 
       <div
-        className={cn(
+        className={twJoin(
           'mt-4 border border-dashed px-4 py-6 text-center transition-colors',
           dragActive ? 'border-sky-400 bg-sky-950/30' : 'border-slate-700',
         )}
@@ -174,10 +148,16 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
             Paste the URL to where to find the image so it&apos;s easier to share this app state and
             work on it later.
           </p>
-          <ImageSourceField
-            key={imageSource}
-            imageSource={imageSource}
-            onPersist={persistImageSource}
+          {/* Uncontrolled: the URL lags behind by the debounce and must not reset the caret. */}
+          <input
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="https://…"
+            defaultValue={imageSource}
+            onChange={(event) => persistImageSource(event.target.value)}
+            className="mt-3 w-full border-b border-slate-700 bg-transparent py-2 text-sm text-slate-400 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none"
           />
         </label>
       </div>
@@ -223,7 +203,7 @@ export function ReferenceImagePanel({ onImageFile }: ReferenceImagePanelProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className={cn(
+              className={twJoin(
                 'rounded-md px-3 py-2 text-sm font-medium',
                 locked
                   ? 'bg-sky-600 text-white hover:bg-sky-500'

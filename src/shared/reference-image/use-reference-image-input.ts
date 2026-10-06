@@ -11,52 +11,39 @@ import { useReferenceImageActions } from '@/shared/reference-image/reference-ima
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 
 type UseReferenceImageInputOptions = {
-  /** When false, paste and drop handlers no-op (tracing / export steps). */
-  enabled?: boolean
+  /** When false, paste and drop are ignored (tracing / export steps). */
+  enabled: boolean
 }
 
-export function useReferenceImageInput(options: UseReferenceImageInputOptions = {}) {
-  const enabled = options.enabled ?? true
-  const { setImageFile } = useReferenceImageActions()
+export function useReferenceImageInput({ enabled }: UseReferenceImageInputOptions) {
+  const { setImageBlob } = useReferenceImageActions()
   const { updateSearch } = useIndexSearchNavigation()
   const imageId = Route.useSearch({ select: (search) => search.imageId })
 
-  const persistImageFile = useEffectEvent(
-    async (file: File, previousImageId: string | undefined) => {
-      const ok = await setImageFile(file)
-      if (!ok) return false
-
-      const nextId = crypto.randomUUID()
-      try {
-        await pruneExpiredReferenceImages()
-        await putReferenceImage({
-          id: nextId,
-          blob: file,
-          mimeType: file.type || 'application/octet-stream',
-          createdAt: Date.now(),
-        })
-        if (previousImageId && previousImageId !== nextId) {
-          await deleteReferenceImage(previousImageId)
-        }
-        updateSearch({ imageId: nextId })
-      } catch {
-        // Image is still in memory; URL restore may fail until the next successful persist.
-      }
-      return true
-    },
-  )
-
-  const onPasteImageFile = useEffectEvent(async (file: File) => {
-    if (!enabled) return false
-    if (!isImageFile(file)) return false
-    return persistImageFile(file, imageId)
-  })
-
   async function handleImageFile(file: File) {
-    if (!enabled) return false
-    if (!isImageFile(file)) return false
-    return persistImageFile(file, imageId)
+    if (!enabled || !isImageFile(file)) return false
+    if (!(await setImageBlob(file))) return false
+
+    const previousImageId = imageId
+    const nextId = crypto.randomUUID()
+    try {
+      await putReferenceImage({
+        id: nextId,
+        blob: file,
+        mimeType: file.type || 'application/octet-stream',
+        createdAt: Date.now(),
+      })
+      updateSearch({ imageId: nextId })
+      // Housekeeping only once the URL points at the new record.
+      if (previousImageId) await deleteReferenceImage(previousImageId)
+      await pruneExpiredReferenceImages()
+    } catch {
+      // Image is still in memory; URL restore may fail until the next successful persist.
+    }
+    return true
   }
+
+  const onPasteImageFile = useEffectEvent(handleImageFile)
 
   useEffect(
     function subscribeToWindowPaste() {
@@ -65,10 +52,7 @@ export function useReferenceImageInput(options: UseReferenceImageInputOptions = 
       const handlePaste = (event: ClipboardEvent) => {
         if (isEditableTarget(event.target)) return
 
-        const items = event.clipboardData?.items
-        if (!items) return
-
-        for (const item of items) {
+        for (const item of event.clipboardData?.items ?? []) {
           if (item.kind !== 'file') continue
           const file = item.getAsFile()
           if (file && isImageFile(file)) {
@@ -87,9 +71,9 @@ export function useReferenceImageInput(options: UseReferenceImageInputOptions = 
     [enabled],
   )
 
+  /** Always claims the drop, so a stray file never navigates the browser away from the app. */
   async function handleMapDrop(event: React.DragEvent<HTMLElement>) {
     event.preventDefault()
-    if (!enabled) return
     const file = event.dataTransfer.files[0]
     if (file) await handleImageFile(file)
   }
@@ -98,9 +82,5 @@ export function useReferenceImageInput(options: UseReferenceImageInputOptions = 
     event.preventDefault()
   }
 
-  return {
-    handleImageFile,
-    handleMapDrop,
-    preventDragOver,
-  }
+  return { handleImageFile, handleMapDrop, preventDragOver }
 }

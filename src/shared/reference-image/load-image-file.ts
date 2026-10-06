@@ -5,22 +5,10 @@ export function isImageFile(file: File): boolean {
   return /\.(png|jpe?g|webp|gif)$/i.test(file.name)
 }
 
-export async function loadImageBlob(blob: Blob): Promise<{
-  bitmap: ImageBitmap
-  objectUrl: string
-  width: number
-  height: number
-}> {
+/** Decodes the blob to prove it is an image and to read its size. Rejects when it is not. */
+export async function loadImageBlob(blob: Blob) {
   const bitmap = await createImageBitmap(blob)
-  const objectUrl = URL.createObjectURL(blob)
-  return {
-    bitmap,
-    objectUrl,
-    width: bitmap.width,
-    height: bitmap.height,
-  }
-}
-
-export async function loadImageFile(file: File) {
-  return loadImageBlob(file)
+  const { width, height } = bitmap
+  bitmap.close()
+  return { objectUrl: URL.createObjectURL(blob), width, height }
 }
