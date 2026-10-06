@@ -1,6 +1,6 @@
+import { twJoin } from 'tailwind-merge'
 import { AppLogo } from '@/components/AppLogo'
 import { Route } from '@/routes/index'
-import { cn } from '@/shared/cn'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 import {
   workflowStepLabels,
@@ -58,7 +58,7 @@ export function WorkflowNav() {
                   type="button"
                   onClick={() => goToStep(pageStep)}
                   aria-current={current ? 'page' : undefined}
-                  className={cn(
+                  className={twJoin(
                     'ml-4 border-b-2 py-3 text-sm font-medium transition-colors',
                     current
                       ? 'border-sky-400 text-base font-semibold text-white'

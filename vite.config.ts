@@ -11,7 +11,7 @@ import { defineConfig, type Plugin } from 'vite'
 const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 const bunLinksCache = path.join(os.homedir(), '.bun/install/cache/links')
 
-/** Keep in sync with `src/shared/site-base.ts`. */
+/** GitHub Pages project-site path (must match the repository name). */
 const GITHUB_PAGES_BASE = '/route-tracer/'
 
 function githubPagesSpaFallback(): Plugin {
@@ -29,11 +29,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     tailwindcss(),
-    react({
-      babel: {
-        plugins: [['babel-plugin-react-compiler', {}]],
-      },
-    }),
+    react({ compiler: true }),
     ...(mode === 'production' ? [githubPagesSpaFallback()] : []),
   ],
   resolve: {

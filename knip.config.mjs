@@ -2,19 +2,10 @@
 const strict = process.env.KNIP_STRICT === '1'
 
 export default {
-  entry: [
-    'src/main.tsx',
-    'src/routes/**/*.ts',
-    'src/routes/**/*.tsx',
-    'src/**/*.test.ts',
-    'src/**/*.test.tsx',
-    'vite.config.ts',
-    'playwright.config.ts',
-    'tests/**/*.ts',
-    'src/shared/site-base.ts',
-  ],
-  ignore: ['.agents/**', 'src/routeTree.gen.ts'],
-  ignoreBinaries: ['code', 'gh', 'rg'],
+  entry: ['src/routes/**/*.tsx', 'src/**/*.test.ts', 'tests/**/*.ts'],
+  ignore: ['.agents/**'],
+  // Platform binaries behind the `typescript` 7 CLI.
+  ignoreDependencies: ['@typescript/typescript-*'],
   rules: {
     files: 'error',
     dependencies: 'error',

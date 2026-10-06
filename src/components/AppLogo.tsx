@@ -1,4 +1,4 @@
-import { cn } from '@/shared/cn'
+import { twMerge } from 'tailwind-merge'
 
 type AppLogoProps = {
   className?: string
@@ -14,7 +14,7 @@ export function AppLogo({ className, title = 'Route Tracer' }: AppLogoProps) {
       fill="none"
       aria-hidden={title ? undefined : true}
       role={title ? 'img' : undefined}
-      className={cn('size-5 shrink-0', className)}
+      className={twMerge('size-5 shrink-0', className)}
     >
       {title ? <title>{title}</title> : null}
       <rect width="32" height="32" rx="8" fill="#0f172a" />
