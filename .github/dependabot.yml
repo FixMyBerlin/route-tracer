@@ -1,12 +1,12 @@
+# Private open-source schedule: first Friday of the month, 07:00 Europe/Berlin.
 version: 2
 updates:
   - package-ecosystem: bun
     directories:
       - /
     schedule:
-      interval: weekly
-      day: monday
-      time: '07:00'
+      interval: cron
+      cronjob: '0 7 * * FRI#1'
       timezone: Europe/Berlin
     cooldown:
       default-days: 5
@@ -28,6 +28,7 @@ updates:
           - 'knip*'
           - 'husky*'
           - '@types/*'
+          - 'bun-types'
           - 'typescript'
           - '@typescript/typescript-*'
           - 'eslint*'
@@ -43,8 +44,10 @@ updates:
       app-dev-minor-patch:
         applies-to: version-updates
         patterns:
+          - '@playwright/*'
           - '@vitejs/*'
-          - 'babel-plugin-*'
+          - 'oxc-transform-react'
+          - 'browserslist*'
           - 'eslint-*'
           - 'husky'
           - 'jsdom'
@@ -54,8 +57,10 @@ updates:
           - 'vitest'
           - 'vite'
           - '@types/*'
+          - 'bun-types'
           - 'typescript'
           - '@typescript/typescript-*'
+          - 'dotenv'
         update-types:
           - minor
           - patch
@@ -66,6 +71,7 @@ updates:
           - '@tanstack/*'
           - '@tailwindcss/*'
           - 'tailwindcss'
+          - '@turf/*'
           - 'react'
           - 'react-dom'
           - '@types/react*'
@@ -85,17 +91,18 @@ updates:
         exclude-patterns:
           - '@tanstack/*'
           - '@tailwindcss/*'
+          - '@turf/*'
           - 'react'
           - 'react-dom'
           - 'maplibre-gl'
           - 'zod'
+          - '@maptiler/*'
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-      time: '07:00'
+      interval: cron
+      cronjob: '0 7 * * FRI#1'
       timezone: Europe/Berlin
     cooldown:
       default-days: 5
