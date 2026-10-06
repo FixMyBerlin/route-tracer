@@ -38,7 +38,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    port: 5173,
+    // Fixed and not shared with our other apps, so e2e never attaches to the wrong dev server.
+    port: 5210,
+    strictPort: true,
     host: '127.0.0.1',
     fs: {
       allow: [projectRoot, bunLinksCache],

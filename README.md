@@ -53,7 +53,7 @@ bun install
 bun run dev
 ```
 
-Open the URL Vite prints (default `http://127.0.0.1:5173/`). The map viewport syncs to the `?map=zoom/lat/lng` search param.
+Open `http://127.0.0.1:5210/`. The port is fixed; the dev server refuses to start if it is taken. The map viewport syncs to the `?map=zoom/lat/lng` search param.
 
 Useful scripts:
 
