@@ -84,7 +84,6 @@ export function RouteSnapperHost() {
   const skipPersistRef = useSkipInitialRoutePersist()
   const { setRouteToolGeoJson, setSegments, setSnapMode, setUndoLength } = useRouteActions()
   const routeToolRef = useRef<RouteTool | null>(null)
-  const hydratedFromUrlRef = useRef(false)
 
   const segmentsToRestoreLatest = useEffectEvent(() => {
     return storedSegments.length > 0 ? storedSegments : urlSegments
@@ -101,21 +100,6 @@ export function RouteSnapperHost() {
       persistRouteSegments(segments)
     }
   })
-
-  useEffect(
-    function hydrateRouteFromUrl() {
-      // Mark on first run even when URL has no route — otherwise our own persist
-      // writing `?route=` would re-enter and wipe waypoint Points from the live tool.
-      if (hydratedFromUrlRef.current) return
-      hydratedFromUrlRef.current = true
-      if (!urlSegments?.length) return
-
-      // Lines only until RouteTool is ready; syncRouteToolGraph restores handles via editExisting.
-      setRouteToolGeoJson(segmentsToRouteToolGeoJson(urlSegments))
-      setSegments(urlSegments)
-    },
-    [urlSegments, setRouteToolGeoJson, setSegments],
-  )
 
   useEffect(
     function syncRouteToolGraph() {
@@ -173,12 +157,6 @@ export function RouteSnapperHost() {
       skipPersistRef,
     ],
   )
-
-  useEffect(function resetHydrationFlagOnUnmount() {
-    return () => {
-      hydratedFromUrlRef.current = false
-    }
-  }, [])
 
   return null
 }

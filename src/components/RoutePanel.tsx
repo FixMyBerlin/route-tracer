@@ -5,11 +5,13 @@ import {
   useRouteSegments,
   useRouteSnapMode,
   useRouteUndoLength,
+  useRouteWaypointCount,
 } from '@/shared/routing/route-store'
 import {
   clearActiveRoute,
   setRouteDrawMode,
-  toggleDrawThroughMode,
+  pressDrawModeShortcut,
+  releaseDrawModeShortcut,
   undoRouteEdit,
   type RouteDrawMode,
 } from '@/shared/routing/route-tool-controller'
@@ -69,13 +71,21 @@ export function RoutePanel() {
   const segments = useRouteSegments()
   const snapMode = useRouteSnapMode()
   const undoLength = useRouteUndoLength()
+  const liveWaypointCount = useRouteWaypointCount()
   const { graphReady } = useRoutingReadiness()
   const clearRouteFromUrl = useClearRouteFromUrl()
   const drawMode: RouteDrawMode = snapMode ? 'snapped' : 'freehand'
 
-  useHotkey('S', () => toggleDrawThroughMode(), {
+  // `requireReset` drops key auto-repeat, which would flip the mode back and forth while held.
+  useHotkey('S', pressDrawModeShortcut, {
     enabled: graphReady,
     ignoreInputs: true,
+    requireReset: true,
+  })
+  useHotkey('S', releaseDrawModeShortcut, {
+    enabled: graphReady,
+    ignoreInputs: true,
+    eventType: 'keyup',
   })
 
   const handleClearRoute = () => {
@@ -83,7 +93,9 @@ export function RoutePanel() {
     clearRouteFromUrl()
   }
 
-  const waypointCount = segments.length === 0 ? 0 : segments.length + 1
+  // Snapped stretches merge into one segment, so only the route tool knows the clicked points.
+  // Until it has loaded a shared route, fall back to the segment ends.
+  const waypointCount = liveWaypointCount || (segments.length === 0 ? 0 : segments.length + 1)
 
   return (
     <>
@@ -112,7 +124,10 @@ export function RoutePanel() {
                   <RouteLineSwatch dashed={option.dashed} />
                   <span className="min-w-0 flex-1">{option.label}</span>
                   {showSwitchHint ? (
-                    <kbd className={switchModeKbdClass} title="Press S to switch to this mode">
+                    <kbd
+                      className={switchModeKbdClass}
+                      title="Tap S to switch to this mode, or hold S to use it only while pressed"
+                    >
                       S
                     </kbd>
                   ) : null}

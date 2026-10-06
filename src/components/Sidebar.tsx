@@ -22,11 +22,12 @@ const stepCopy: Record<WorkflowStep, { title: string; description: React.ReactNo
         Click on the map to draw the route. Use{' '}
         <kbd
           className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-slate-400"
-          title="Press S to switch draw mode"
+          title="Tap S to switch draw mode, hold S to switch only while pressed"
         >
           S
         </kbd>{' '}
-        to toggle freehand and route snapping.
+        to switch between freehand and route snapping — tap to switch, or hold it to switch only
+        while pressed.
       </>
     ),
   },

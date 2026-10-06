@@ -14,7 +14,11 @@ import { mergeAdjacentWaypoints } from '@/shared/routing/merge-route-waypoints'
 import { ROAD_SNAP_RADIUS_METERS, nearestPointOnLines } from '@/shared/routing/nearest-road-point'
 import { pickRouteEndToResume, waypointsStartingFromEnd } from '@/shared/routing/resume-route-end'
 import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
-import { clearRouteState, setRouteSnapModeState } from '@/shared/routing/route-store'
+import {
+  clearRouteState,
+  setRouteSnapModeState,
+  setRouteWaypointCountState,
+} from '@/shared/routing/route-store'
 import { withSnappedEnd, type SnapEndResult } from '@/shared/routing/snap-route-end'
 
 export type RouteDrawMode = 'snapped' | 'freehand'
@@ -61,11 +65,13 @@ export function setRouteSnapperNetwork(network: FeatureCollection<LineString> | 
  * decorator needs its waypoints to tell them apart.
  */
 function decorateForRender(routeTool: RouteTool, geojson: FeatureCollection) {
+  const waypoints = readWaypoints(routeTool)
+  setRouteWaypointCountState(waypoints.length)
   return decorateRouteToolGeoJson(
     geojson,
     routeFinished ? null : lastPointerLonLat,
     routeSnapperNetwork,
-    readWaypoints(routeTool),
+    waypoints,
     waypointRemoveTarget(routeTool),
   )
 }
@@ -116,7 +122,26 @@ function readWaypoints(routeTool: RouteTool): RouteWaypoint[] {
     }
   }
 
-  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection
+  // Below two waypoints route-snapper exports no feature, so read its render output instead.
+  const rendered = readRenderedWaypoints(routeTool)
+  if (rendered.confirmed.length > 0 || rendered.hovered.length === 0) return rendered.confirmed
+
+  // A lone hovered point is either the only waypoint with the cursor on it, or just the
+  // preview of the first click on an empty route — route-snapper draws both the same.
+  // A point being dragged is real. Otherwise look again with the cursor moved off the
+  // route: a real waypoint stays put, the preview follows the cursor away.
+  const pointer = lastPointerLonLat
+  if (rendered.dragging || !pointer) return rendered.hovered
+  routeTool.inner.onMouseMove(pointer[0] + 1, pointer[1], 0)
+  const { confirmed } = readRenderedWaypoints(routeTool)
+  applyPointer(routeTool, pointer)
+  return confirmed
+}
+
+function readRenderedWaypoints(routeTool: RouteTool) {
+  const geojson = JSON.parse(routeTool.inner.renderGeojson()) as FeatureCollection & {
+    cursor?: string
+  }
   const confirmed: RouteWaypoint[] = []
   const hovered: RouteWaypoint[] = []
   for (const feature of geojson.features) {
@@ -129,7 +154,7 @@ function readWaypoints(routeTool: RouteTool): RouteWaypoint[] {
     if (feature.properties?.hovered) hovered.push(waypoint)
     else confirmed.push(waypoint)
   }
-  return confirmed.length > 0 ? confirmed : hovered
+  return { confirmed, hovered, dragging: geojson.cursor === 'grabbing' }
 }
 
 function lastWaypointLonLat(routeTool: RouteTool): [number, number] | null {
@@ -466,8 +491,8 @@ function handleRouteClick(routeTool: RouteTool, originalOnClick: () => void) {
 
 /**
  * Route-snapper registers `s` / Enter on `keypress` and finishes on double-click.
- * We own mode switching via TanStack Hotkeys. Double-click finishes; clicking an
- * endpoint resumes drawing from that end.
+ * We own mode switching via TanStack Hotkeys ({@link pressDrawModeShortcut}). Double-click
+ * finishes; clicking an endpoint resumes drawing from that end.
  */
 export function configureRouteToolInteractions(routeTool: RouteTool) {
   restoreExtendRoute(routeTool)
@@ -561,8 +586,32 @@ export function configureRouteToolInteractions(routeTool: RouteTool) {
   routeTool.map.on('click', routeTool.onClick)
 }
 
-export function toggleDrawThroughMode() {
+/** Holding the shortcut at least this long switches the mode only until it is released. */
+const DRAW_MODE_HOLD_MS = 300
+let drawModeShortcutPressedAt: number | null = null
+
+function toggleRouteDrawMode() {
   setRouteDrawMode(drawMode === 'snapped' ? 'freehand' : 'snapped')
+}
+
+/**
+ * The draw-mode shortcut works two ways: a tap switches the mode for good, holding it down
+ * switches only for the clicks made meanwhile — draw a few freehand points across a park,
+ * let go, and the next click snaps to a road again.
+ *
+ * Call once per physical press; key auto-repeat must not reach this.
+ */
+export function pressDrawModeShortcut() {
+  drawModeShortcutPressedAt = performance.now()
+  toggleRouteDrawMode()
+}
+
+export function releaseDrawModeShortcut() {
+  const pressedAt = drawModeShortcutPressedAt
+  drawModeShortcutPressedAt = null
+  if (pressedAt !== null && performance.now() - pressedAt >= DRAW_MODE_HOLD_MS) {
+    toggleRouteDrawMode()
+  }
 }
 
 export function setRouteDrawMode(mode: RouteDrawMode) {
