@@ -4,6 +4,7 @@ import type { MapLayerMouseEvent, MapLibreEvent } from 'maplibre-gl'
 import { AttributionControl, Map, type ViewStateChangeEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { CoverageMaskLayers } from '@/components/CoverageMaskLayers'
+import { LoadNetworkPrompt } from '@/components/LoadNetworkPrompt'
 import { MapGeocodingControl } from '@/components/MapGeocodingControl'
 import { MapLoadingIndicator } from '@/components/MapLoadingIndicator'
 import { NetworkHighlightLayers } from '@/components/NetworkHighlightLayers'
@@ -86,6 +87,7 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
       </Map>
       <MapLoadingIndicator />
       {tracing ? <ViewMinZoomOverlay zoom={zoom} /> : null}
+      {tracing ? <LoadNetworkPrompt zoom={zoom} /> : null}
     </>
   )
 }

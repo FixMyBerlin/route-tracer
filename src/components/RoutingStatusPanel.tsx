@@ -1,17 +1,13 @@
-import { formatCoverageAgeHour } from '@osm-editor-kit/osm-coverage'
 import { formatDistanceStrict } from 'date-fns'
 import { useRef, useSyncExternalStore } from 'react'
-import { useMap } from 'react-map-gl/maplibre'
 import { twJoin } from 'tailwind-merge'
 import { Route } from '@/routes/index'
-import { useMapLoaded, useMapViewEpoch, useOsmStorageReady } from '@/shared/map/map-chrome-store'
 import { NETWORK_HIGHLIGHT_COLORS, viewMinZoom } from '@/shared/routing/constants'
-import { scheduleCoverageFromMap } from '@/shared/routing/map-helpers'
-import { useOsmCoverageFetch, useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
+import { useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
 import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
 import type { NetworkHighlightMode } from '@/shared/routing/search-schema'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
-import { viewportNeedsOsmFetch } from '@/shared/routing/viewport-needs-osm-fetch'
+import { useViewportCoverage } from '@/shared/routing/use-viewport-coverage'
 
 type RoutingStatusPanelProps = {
   zoom: number
@@ -21,7 +17,6 @@ function formatCount(value: number) {
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
 
-const ONE_HOUR_MS = 60 * 60 * 1000
 const ONE_MINUTE_MS = 60_000
 
 function subscribeToMinuteClock(onStoreChange: () => void) {
@@ -82,37 +77,31 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
   const { updateSearch } = useIndexSearchNavigation()
   const { wayCount, edgeCount, graphReady, graphBuilding, graphError } = useRoutingReadiness()
   const savedAt = useOsmCoverageQuery({ select: (data) => data.savedAt })
-  const coverage = useOsmCoverageQuery({ select: (data) => data.coverage })
   const savedAtIso = savedAt.data ?? null
   const nowMs = useMinuteClockMs()
-  const ageLabel = formatCoverageAgeHour(savedAtIso, new Date(nowMs))
   const savedAtMs = savedAtIso ? Date.parse(savedAtIso) : Number.NaN
-  const cacheStale = Number.isFinite(savedAtMs) && nowMs - savedAtMs > ONE_HOUR_MS
   const cacheAgeDistance = Number.isFinite(savedAtMs)
     ? formatDistanceStrict(savedAtMs, nowMs)
     : null
-  const { mainMap } = useMap()
-  const mapLoaded = useMapLoaded()
-  // Subscribed only to re-render — and so re-read the bounds below — once the camera settles.
-  useMapViewEpoch()
-  const storageReady = useOsmStorageReady()
-  const { loadOsmData, isFetching: coverageBusy, error: loadError } = useOsmCoverageFetch()
+  const {
+    ready,
+    zoomTooLow,
+    needsFetch,
+    centerLoaded,
+    isFetching: coverageBusy,
+    error: loadError,
+    loadViewport,
+  } = useViewportCoverage(zoom)
   const reloadDialogRef = useRef<HTMLDialogElement>(null)
 
-  const mapLibre = mapLoaded ? (mainMap?.getMap() ?? null) : null
-  const fetchArgs = mapLibre ? scheduleCoverageFromMap(mapLibre) : null
-  const needsFetch =
-    fetchArgs != null &&
-    viewportNeedsOsmFetch(fetchArgs.bounds, coverage.data, fetchArgs.zoom, fetchArgs.mapSizePx)
-
-  let status: string | null = 'Load the road network for this view to start tracing.'
+  let status: string | null = 'Load roads for this view to start tracing.'
   let tone: 'muted' | 'loading' | 'error' = 'muted'
 
   if (coverageBusy || graphBuilding) {
-    status = 'Loading OSM…'
+    status = 'Loading roads…'
     tone = 'loading'
   } else if (loadError) {
-    status = `Loading OSM failed: ${loadError}`
+    status = loadError
     tone = 'error'
   } else if (graphError) {
     status = `Routing graph failed: ${graphError}`
@@ -124,25 +113,15 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
     tone = 'loading'
   }
 
-  const zoomTooLow = zoom < viewMinZoom
-  const loadDisabled = !mapLibre || !storageReady || coverageBusy || zoomTooLow || !needsFetch
-  const reloadDisabled = !mapLibre || !storageReady || coverageBusy || zoomTooLow
-  const loadDisabledReason = !mapLibre
-    ? 'Map is not ready'
-    : !storageReady
-      ? 'Restoring cached OSM…'
-      : coverageBusy
-        ? 'Loading OSM…'
-        : zoomTooLow
-          ? 'Zoom in to load the road network'
-          : !needsFetch
-            ? 'Road network for this view is already loaded'
-            : undefined
+  const canLoad = ready && !zoomTooLow && !coverageBusy
+  const viewLoaded = ready && !zoomTooLow && !needsFetch
 
-  async function loadViewport(options?: { force?: boolean; clearPersistedOnForce?: boolean }) {
-    if (!mapLibre) return
-    await loadOsmData(scheduleCoverageFromMap(mapLibre), options)
-  }
+  let dataStatus = 'Roads for this view are loaded.'
+  if (coverageBusy) dataStatus = 'Loading roads…'
+  else if (!ready) dataStatus = 'Looking for roads saved in this browser…'
+  else if (zoomTooLow) dataStatus = `Zoom in to level ${viewMinZoom} or closer to load roads.`
+  else if (!centerLoaded) dataStatus = 'No roads loaded for this view yet.'
+  else if (needsFetch) dataStatus = 'Roads are loaded for part of this view.'
 
   function openReloadConfirm() {
     reloadDialogRef.current?.showModal()
@@ -258,63 +237,49 @@ export function RoutingStatusPanel({ zoom }: RoutingStatusPanelProps) {
       </section>
 
       <section className="border-b border-slate-800 py-5">
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="text-sm font-medium text-white">OSM Data</h2>
-          {ageLabel ? (
-            <span
-              className={twJoin(
-                'shrink-0 text-xs',
-                cacheStale ? 'text-amber-400' : 'text-slate-400',
-              )}
-            >
-              from ~{ageLabel}
-            </span>
-          ) : null}
-        </div>
+        <h2 className="text-sm font-medium text-white">Road data</h2>
 
-        {cacheAgeDistance ? (
-          <p className="mt-2 text-sm leading-tight text-slate-400">
-            OSM data is cached locally and {cacheAgeDistance} old.
-          </p>
+        <p className="mt-2 text-sm leading-tight text-slate-400">
+          {dataStatus}
+          {cacheAgeDistance
+            ? ` Loaded roads are saved in this browser, last updated ${cacheAgeDistance} ago.`
+            : ' Loaded roads are saved in this browser.'}
+        </p>
+
+        {viewLoaded ? (
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50"
+            disabled={!canLoad}
+            onClick={openReloadConfirm}
+          >
+            <ReloadIcon />
+            Reload roads for this view
+          </button>
         ) : (
-          <p className="mt-2 text-sm leading-tight text-slate-400">
-            OSM data is cached locally after the first load.
-          </p>
+          <>
+            <button
+              type="button"
+              className="mt-3 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+              disabled={!canLoad}
+              onClick={() => void loadViewport()}
+            >
+              {centerLoaded ? 'Load the rest of this view' : 'Load roads for this view'}
+            </button>
+            <p className="mt-2 text-xs leading-tight text-slate-500">
+              Every area you load puts work on a community-run server. Please load only what you
+              need.
+            </p>
+          </>
         )}
-
-        <div className="mt-4 flex items-stretch gap-2">
-          <span className="min-w-0 flex-1" title={loadDisabled ? loadDisabledReason : undefined}>
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={loadDisabled}
-              onClick={() => {
-                void loadViewport()
-              }}
-            >
-              Load road network for current view port
-            </button>
-          </span>
-          <span title="Reload OSM for current view box">
-            <button
-              type="button"
-              aria-label="Reload OSM for current view box"
-              className="flex size-[2.625rem] shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={reloadDisabled}
-              onClick={openReloadConfirm}
-            >
-              <ReloadIcon />
-            </button>
-          </span>
-        </div>
-        <p className="mt-1.5 text-xs leading-tight text-slate-500">Zoom in to make it smaller</p>
 
         <dialog
           ref={reloadDialogRef}
           className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-200 shadow-xl backdrop:bg-black/50"
         >
           <p className="text-sm leading-snug text-slate-200">
-            Are you sure you want to load fresh data from OSM servers?
+            Download the roads for this view again? Do this only when the roads changed in
+            OpenStreetMap — it puts work on a community-run server.
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button
