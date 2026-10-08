@@ -76,7 +76,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.0",
     "vite": "^8.0.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
     "@typescript/typescript-linux-x64": "^7.0.0"
