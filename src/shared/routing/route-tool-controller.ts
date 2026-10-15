@@ -3,6 +3,7 @@ import type { MapMouseEvent } from 'maplibre-gl'
 import type { RouteTool } from 'route-snapper-ts'
 import { ROUTE_WAYPOINT_RADIUS_PX } from '@/shared/routing/constants'
 import { decorateRouteToolGeoJson } from '@/shared/routing/decorate-route-tool-geojson'
+import type { FlaggedWaypoint } from '@/shared/routing/flagged-waypoint'
 import { haversineMeters } from '@/shared/routing/haversine'
 import {
   indexOfNearestWaypoint,
@@ -16,8 +17,10 @@ import { pickRouteEndToResume, waypointsStartingFromEnd } from '@/shared/routing
 import { normalizeRouteToolGeoJson } from '@/shared/routing/route-segments'
 import {
   clearRouteState,
+  getRouteState,
   setRouteSnapModeState,
   setRouteWaypointCountState,
+  setRouteWaypointsState,
 } from '@/shared/routing/route-store'
 import { withSnappedEnd, type SnapEndResult } from '@/shared/routing/snap-route-end'
 
@@ -43,13 +46,20 @@ let drawMode: RouteDrawMode = 'snapped'
  * Snapshots of confirmed waypoints taken before each add or remove. route-snapper's own
  * undo stack is wiped by `editExisting`, which we use after most clicks.
  */
-let waypointUndoStack: RouteWaypoint[][] = []
+let waypointUndoStack: FlaggedWaypoint[][] = []
 const MAX_WAYPOINT_UNDO = 50
 
 /** Matches route-snapper-ts hover/click radius. */
 const SNAP_DISTANCE_PIXELS = 30
 
+/**
+ * Whether the route was finished when its tool went away (more roads loaded, step left), so
+ * the next tool picks it up in the same state. `null`: load it as finished.
+ */
+let finishedBeforeReload: boolean | null = null
+
 export function setActiveRouteTool(tool: RouteTool | null) {
+  if (!tool && activeRouteTool?.active) finishedBeforeReload = routeFinished
   activeRouteTool = tool
   routeFinished = false
   waypointUndoStack = []
@@ -185,8 +195,24 @@ function snapshotWaypoints(waypoints: RouteWaypoint[]): RouteWaypoint[] {
   }))
 }
 
+/**
+ * Undo keeps who placed each point too, so undoing a re-snap does not turn the snapping's own
+ * points into the user's. The store holds those flags for the same points the tool has.
+ */
 function pushWaypointUndo(waypoints: RouteWaypoint[]) {
-  waypointUndoStack.push(snapshotWaypoints(waypoints))
+  const flagged = getRouteState().waypoints
+  pushFlaggedUndo(
+    waypoints.map((waypoint, index) => ({
+      lon: waypoint.lon,
+      lat: waypoint.lat,
+      snapped: waypoint.snapped,
+      pinned: flagged.length === waypoints.length ? (flagged[index]?.pinned ?? true) : true,
+    })),
+  )
+}
+
+function pushFlaggedUndo(waypoints: FlaggedWaypoint[]) {
+  waypointUndoStack.push(waypoints.map((waypoint) => ({ ...waypoint })))
   if (waypointUndoStack.length > MAX_WAYPOINT_UNDO) waypointUndoStack.shift()
 }
 
@@ -260,6 +286,8 @@ export function undoRouteEdit() {
   if (!routeTool?.active) return
   const previous = waypointUndoStack.pop()
   if (previous === undefined) return
+  // Seed the flags first; the redraw below matches the restored points against them.
+  setRouteWaypointsState(previous)
   restoreWaypoints(routeTool, previous, drawMode === 'freehand')
   if (routeFinished && readWaypoints(routeTool).length < 2) {
     routeFinished = false
@@ -714,8 +742,54 @@ function resumeActiveRoute(routeTool: RouteTool, waypoints: RouteWaypoint[]) {
   forceEnterFreehandMode(routeTool)
 }
 
+/** The waypoints of the route in the tool, or `null` when no route is loaded. */
+export function readActiveRouteWaypoints(): RouteWaypoint[] | null {
+  const routeTool = activeRouteTool
+  if (!routeTool?.active) return null
+  return readWaypoints(routeTool)
+}
+
+function loadWaypoints(routeTool: RouteTool, waypoints: RouteWaypoint[], finished: boolean) {
+  routeTool.startRoute()
+  routeTool.inner.editExisting(snapshotWaypoints(waypoints))
+  routeFinished = finished && waypoints.length >= 2
+  if (routeFinished) {
+    routeTool.map.boxZoom.enable()
+    routeTool.map.doubleClickZoom.enable()
+  }
+  restoreExtendRoute(routeTool)
+  applyDrawModeToWasm(routeTool)
+  applyPointer(routeTool, lastPointerLonLat)
+  syncRouteToolRender(routeTool)
+}
+
+/** Load a saved route into a fresh tool. Returns false when no tool is ready yet. */
+export function restoreActiveRoute(waypoints: RouteWaypoint[]) {
+  const routeTool = activeRouteTool
+  if (!routeTool) return false
+  waypointUndoStack = []
+  // A route opened from a link is there to be adjusted, not extended; clicking an end draws on.
+  loadWaypoints(routeTool, waypoints, finishedBeforeReload ?? true)
+  finishedBeforeReload = null
+  return true
+}
+
+/** Swap the whole route (auto-snap, re-match), keeping the old one on the undo stack. */
+export function replaceActiveRoute(waypoints: RouteWaypoint[], previous: FlaggedWaypoint[]) {
+  const routeTool = activeRouteTool
+  if (!routeTool) {
+    // The next tool loads this route fresh, not in the state the last one was left in.
+    finishedBeforeReload = null
+    return false
+  }
+  if (routeTool.active) pushFlaggedUndo(previous)
+  loadWaypoints(routeTool, waypoints, true)
+  return true
+}
+
 export function clearActiveRoute() {
   routeFinished = false
+  finishedBeforeReload = null
   waypointUndoStack = []
   if (!activeRouteTool) {
     clearRouteState()

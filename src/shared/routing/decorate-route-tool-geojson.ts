@@ -2,7 +2,10 @@ import type { Feature, FeatureCollection, LineString, Point, Position } from 'ge
 import { isOriginalOsmNode } from '@/shared/routing/densify-osm-for-snapping'
 import { haversineMeters } from '@/shared/routing/haversine'
 import { nearestPointOnLines } from '@/shared/routing/nearest-road-point'
-import { normalizeRouteToolGeoJson, segmentsToWaypoints } from '@/shared/routing/route-segments'
+import {
+  normalizeRouteToolGeoJson,
+  segmentsToFlaggedWaypoints,
+} from '@/shared/routing/route-segments'
 
 const WAYPOINT_TYPES = new Set(['snapped-waypoint', 'free-waypoint'])
 const CLICK_INDEX_MATCH_METERS = 2
@@ -136,7 +139,7 @@ function clickIndexForPoint(lon: number, lat: number, ordered: ClickWaypoint[]) 
 function orderedClickWaypoints(features: Feature[], waypoints: ClickWaypoint[]): ClickWaypoint[] {
   if (waypoints.length > 0) return waypoints
 
-  const fromRoute = segmentsToWaypoints(
+  const fromRoute = segmentsToFlaggedWaypoints(
     normalizeRouteToolGeoJson({ type: 'FeatureCollection', features }),
   )
   if (fromRoute.length > 0) return fromRoute

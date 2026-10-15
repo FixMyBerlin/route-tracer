@@ -29,3 +29,11 @@ export function coverageContainsPoint(
     ? polygonContains(geometry.coordinates, lng, lat)
     : geometry.coordinates.some((rings) => polygonContains(rings, lng, lat))
 }
+
+/** True when every point lies inside the loaded OSM coverage. */
+export function coverageContainsAll(
+  coverage: Feature<Polygon | MultiPolygon> | null | undefined,
+  points: { lon: number; lat: number }[],
+) {
+  return points.every((point) => coverageContainsPoint(coverage, point.lon, point.lat))
+}

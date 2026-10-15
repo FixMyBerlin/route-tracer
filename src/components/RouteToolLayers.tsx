@@ -7,6 +7,7 @@ import {
   ROUTE_WAYPOINT_RADIUS_PX,
 } from '@/shared/routing/constants'
 import {
+  ROUTE_GHOST_LAYER_ID,
   ROUTE_MANUAL_LAYER_ID,
   ROUTE_SNAPPED_LAYER_ID,
   ROUTE_TOOL_SOURCE_ID,
@@ -17,7 +18,7 @@ import { useRouteToolGeoJson } from '@/shared/routing/route-store'
 
 /**
  * Declarative paint for route-snapper `renderGeojson()` output:
- * LineStrings (`snapped`) plus Points (`snapped-waypoint` / `free-waypoint`).
+ * LineStrings (`snapped`, or `ghost` for a saved route waiting for roads) plus Points (`snapped-waypoint` / `free-waypoint`).
  *
  * Filters use expression syntax only (no legacy `$type`) so they can combine with `get`.
  */
@@ -55,6 +56,19 @@ export function RouteToolLayers() {
           'line-color': ROUTE_SEGMENT_COLORS.freehand,
           'line-width': ROUTE_LINE_WIDTH_PX,
           'line-dasharray': [0.5, 1.5],
+        }}
+      />
+      <Layer
+        id={ROUTE_GHOST_LAYER_ID}
+        type="line"
+        source={ROUTE_TOOL_SOURCE_ID}
+        filter={['all', ['==', ['geometry-type'], 'LineString'], ['==', ['get', 'ghost'], true]]}
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': ROUTE_SEGMENT_COLORS.snapped,
+          'line-width': 2,
+          'line-opacity': 0.6,
+          'line-dasharray': [2, 2],
         }}
       />
       <Layer

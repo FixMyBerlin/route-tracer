@@ -13,6 +13,9 @@ export const ROUTE_SEGMENT_COLORS = {
   freehand: '#0f172a',
 } as const
 
+/** Places on the route to check. */
+export const REVIEW_HIGHLIGHT_COLOR = '#f59e0b'
+
 export const ROUTE_LINE_WIDTH_PX = 5
 /**
  * Shift snapped strokes to the right of travel (80% of width). Outbound and

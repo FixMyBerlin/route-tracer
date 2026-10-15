@@ -1,71 +1,118 @@
 import type { Position } from 'geojson'
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
-import type { RouteSegment, SegmentKind } from '@/shared/routing/route-segments'
+import type { FlaggedWaypoint } from '@/shared/routing/flagged-waypoint'
+import {
+  segmentsToFlaggedWaypoints,
+  type RouteSegment,
+  type SegmentKind,
+} from '@/shared/routing/route-segments'
 
-type CompactSegment = {
+/**
+ * What the `route` URL param holds: the decisions, not the geometry. The geometry is rebuilt
+ * from the waypoints once roads are loaded; `sectionLengths` (meters between consecutive
+ * waypoints, as saved) shows which stretches changed when OSM did.
+ */
+export type RouteSearchState = {
+  waypoints: FlaggedWaypoint[]
+  sectionLengths?: number[]
+}
+
+const FLAG_SNAPPED = 1
+const FLAG_PINNED = 2
+
+/** `[lon, lat, flags]` */
+type CompactWaypoint = [number, number, number]
+
+type CompactRouteV2 = {
+  v: 2
+  w: CompactWaypoint[]
+  l?: number[]
+}
+
+/** v1 stored the drawn stretches themselves. Still decoded so old links keep working. */
+type CompactSegmentV1 = {
   k: 's' | 'm'
   c: Position[]
   w?: number[]
 }
 
-type CompactRoutePayload = {
-  s: CompactSegment[]
-}
-
 const roundCoord = (value: number) => Math.round(value * 1e6) / 1e6
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
 
 function isPosition(value: unknown): value is Position {
   return (
     Array.isArray(value) &&
     value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number' &&
-    Number.isFinite(value[0]) &&
-    Number.isFinite(value[1])
+    isFiniteNumber(value[0]) &&
+    isFiniteNumber(value[1])
   )
 }
 
-function isCompactSegment(value: unknown): value is CompactSegment {
+function isCompactWaypoint(value: unknown): value is CompactWaypoint {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    isFiniteNumber(value[0]) &&
+    isFiniteNumber(value[1]) &&
+    Number.isInteger(value[2])
+  )
+}
+
+function isCompactSegmentV1(value: unknown): value is CompactSegmentV1 {
   if (typeof value !== 'object' || value == null) return false
-  const segment = value as CompactSegment
+  const segment = value as CompactSegmentV1
   if (segment.k !== 's' && segment.k !== 'm') return false
-  if (!Array.isArray(segment.c) || segment.c.length < 2 || !segment.c.every(isPosition))
-    return false
-  if (
-    segment.w != null &&
-    (!Array.isArray(segment.w) || !segment.w.every((id) => Number.isInteger(id)))
-  ) {
-    return false
-  }
-  return true
+  return Array.isArray(segment.c) && segment.c.length >= 2 && segment.c.every(isPosition)
 }
 
-function toCompactSegment(segment: RouteSegment): CompactSegment {
+function toCompactWaypoint(waypoint: FlaggedWaypoint): CompactWaypoint {
+  const flags = (waypoint.snapped ? FLAG_SNAPPED : 0) | (waypoint.pinned ? FLAG_PINNED : 0)
+  return [roundCoord(waypoint.lon), roundCoord(waypoint.lat), flags]
+}
+
+function fromCompactWaypoint([lon, lat, flags]: CompactWaypoint): FlaggedWaypoint {
   return {
-    k: segment.segment_kind === 'snapped' ? 's' : 'm',
-    c: segment.coordinates.map(([lng, lat]) => [roundCoord(lng ?? 0), roundCoord(lat ?? 0)]),
-    ...(segment.osm_way_ids?.length ? { w: segment.osm_way_ids } : {}),
+    lon: roundCoord(lon),
+    lat: roundCoord(lat),
+    snapped: (flags & FLAG_SNAPPED) !== 0,
+    pinned: (flags & FLAG_PINNED) !== 0,
   }
 }
 
-function fromCompactSegment(segment: CompactSegment, index: number): RouteSegment {
+function fromCompactSegmentV1(segment: CompactSegmentV1, index: number): RouteSegment {
   const segmentKind: SegmentKind = segment.k === 's' ? 'snapped' : 'manual'
   return {
     segment_index: index,
     segment_kind: segmentKind,
     coordinates: segment.c.map(([lng, lat]) => [roundCoord(lng ?? 0), roundCoord(lat ?? 0)]),
-    ...(segment.w?.length ? { osm_way_ids: segment.w } : {}),
   }
 }
 
-export function encodeRouteSearch(segments: RouteSegment[]): string {
-  const payload: CompactRoutePayload = {
-    s: segments.map(toCompactSegment),
+export function encodeRouteSearch(state: RouteSearchState): string {
+  const payload: CompactRouteV2 = {
+    v: 2,
+    w: state.waypoints.map(toCompactWaypoint),
+    ...(state.sectionLengths?.length ? { l: state.sectionLengths.map(Math.round) } : {}),
   }
   return compressToEncodedURIComponent(JSON.stringify(payload))
 }
 
-export function decodeRouteSearch(value: string | undefined): RouteSegment[] | undefined {
+function decodeV2(record: Partial<CompactRouteV2>): RouteSearchState | undefined {
+  if (!Array.isArray(record.w) || !record.w.every(isCompactWaypoint)) return undefined
+  const waypoints = record.w.map(fromCompactWaypoint)
+  const lengths = record.l
+  const sectionLengths =
+    Array.isArray(lengths) &&
+    lengths.length === waypoints.length - 1 &&
+    lengths.every(isFiniteNumber)
+      ? lengths
+      : undefined
+  return { waypoints, ...(sectionLengths ? { sectionLengths } : {}) }
+}
+
+export function decodeRouteSearch(value: string | undefined): RouteSearchState | undefined {
   if (!value) return undefined
 
   try {
@@ -74,10 +121,12 @@ export function decodeRouteSearch(value: string | undefined): RouteSegment[] | u
     const parsed: unknown = JSON.parse(json)
     if (!parsed || typeof parsed !== 'object') return undefined
 
-    const record = parsed as Partial<CompactRoutePayload>
-    if (!Array.isArray(record.s) || !record.s.every(isCompactSegment)) return undefined
+    if ((parsed as { v?: unknown }).v === 2) return decodeV2(parsed as Partial<CompactRouteV2>)
 
-    return record.s.map(fromCompactSegment)
+    const v1 = parsed as { s?: unknown }
+    if (!Array.isArray(v1.s) || !v1.s.every(isCompactSegmentV1)) return undefined
+    const waypoints = segmentsToFlaggedWaypoints(v1.s.map(fromCompactSegmentV1))
+    return waypoints.length > 0 ? { waypoints } : undefined
   } catch {
     return undefined
   }

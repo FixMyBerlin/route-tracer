@@ -6,6 +6,7 @@ import {
   useRouteSnapMode,
   useRouteUndoLength,
   useRouteWaypointCount,
+  useRouteWaypoints,
 } from '@/shared/routing/route-store'
 import {
   clearActiveRoute,
@@ -72,6 +73,7 @@ export function RoutePanel() {
   const snapMode = useRouteSnapMode()
   const undoLength = useRouteUndoLength()
   const liveWaypointCount = useRouteWaypointCount()
+  const savedWaypoints = useRouteWaypoints()
   const { graphReady } = useRoutingReadiness()
   const clearRouteFromUrl = useClearRouteFromUrl()
   const drawMode: RouteDrawMode = snapMode ? 'snapped' : 'freehand'
@@ -93,9 +95,8 @@ export function RoutePanel() {
     clearRouteFromUrl()
   }
 
-  // Snapped stretches merge into one segment, so only the route tool knows the clicked points.
-  // Until it has loaded a shared route, fall back to the segment ends.
-  const waypointCount = liveWaypointCount || (segments.length === 0 ? 0 : segments.length + 1)
+  // The route tool counts the point being placed too; before it has loaded, use the saved ones.
+  const waypointCount = liveWaypointCount || savedWaypoints.length
 
   return (
     <>

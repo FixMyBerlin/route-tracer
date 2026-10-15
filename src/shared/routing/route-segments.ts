@@ -1,7 +1,6 @@
-import simplify from '@turf/simplify'
 import type { Feature, FeatureCollection, GeoJsonProperties, LineString, Position } from 'geojson'
-import type { RouteProps } from 'route-snapper-ts'
-import { pathLengthMeters } from '@/shared/routing/haversine'
+import { splitLineAtWaypoints } from '@/shared/routing/auto-snap/split-at-waypoints'
+import type { FlaggedWaypoint } from '@/shared/routing/flagged-waypoint'
 
 export type SegmentKind = 'snapped' | 'manual'
 
@@ -10,17 +9,6 @@ export type RouteSegment = {
   segment_kind: SegmentKind
   coordinates: Position[]
   osm_way_ids?: number[]
-}
-
-/**
- * Douglas–Peucker tolerance in degrees (~0.5 m at mid-latitudes).
- * Strips densified / colinear vertices without changing the route's look.
- */
-const ROUTE_EXPORT_SIMPLIFY_TOLERANCE = 0.000005
-
-export type RouteExportOptions = {
-  /** When true (default), simplify each segment LineString before download. */
-  simplify?: boolean
 }
 
 const roundCoord = (value: number) => Math.round(value * 1e6) / 1e6
@@ -58,10 +46,11 @@ export function normalizeRouteToolGeoJson(collection: FeatureCollection): RouteS
   return segments
 }
 
-function mergeSegmentCoordinates(segmentCoords: Position[][]): Position[] {
+/** The whole route as one line, joining the stretches end to end. */
+export function routeLineFromSegments(segments: RouteSegment[]): Position[] {
   const merged: Position[] = []
 
-  for (const coordinates of segmentCoords) {
+  for (const { coordinates } of segments) {
     for (const coordinate of coordinates) {
       const rounded = roundPosition(coordinate)
       const previous = merged.at(-1)
@@ -75,55 +64,89 @@ function mergeSegmentCoordinates(segmentCoords: Position[][]): Position[] {
   return merged
 }
 
-export function segmentsToRouteFeature(
-  segments: RouteSegment[],
-): Feature<LineString, RouteProps> | null {
-  if (segments.length === 0) return null
+/**
+ * Waypoints that rebuild the given stretches. A snapped stretch only knows its two ends (the
+ * clicks in between were merged into it); every vertex of a freehand stretch was a click.
+ * Used to open links saved before the URL held waypoints.
+ */
+export function segmentsToFlaggedWaypoints(segments: RouteSegment[]): FlaggedWaypoint[] {
+  const waypoints: FlaggedWaypoint[] = []
 
-  const coordinates = mergeSegmentCoordinates(segments.map((segment) => segment.coordinates))
-  if (coordinates.length < 2) return null
-
-  const waypoints = segmentsToWaypoints(segments)
-  const lengthMeters = Math.round(pathLengthMeters(coordinates))
-
-  return {
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates,
-    },
-    properties: {
-      waypoints,
-      length_meters: lengthMeters,
-      route_name: 'Shared route',
-      full_path: [],
-    },
+  const push = (position: Position | undefined, snapped: boolean) => {
+    const lon = position?.[0]
+    const lat = position?.[1]
+    if (lon == null || lat == null) return
+    const previous = waypoints.at(-1)
+    if (previous && previous.lon === lon && previous.lat === lat) {
+      // A stretch boundary: keep it snapped when either side snaps, so that side still routes.
+      previous.snapped ||= snapped
+      return
+    }
+    waypoints.push({ lon, lat, snapped, pinned: true })
   }
-}
-
-export function segmentsToWaypoints(segments: RouteSegment[]) {
-  const waypoints: RouteProps['waypoints'] = []
-
-  const first = segments[0]?.coordinates[0]
-  if (!first) return waypoints
-
-  waypoints.push({
-    lon: first[0] ?? 0,
-    lat: first[1] ?? 0,
-    snapped: segments[0]!.segment_kind === 'snapped',
-  })
 
   for (const segment of segments) {
-    const end = segment.coordinates.at(-1)
-    if (!end) continue
-    waypoints.push({
-      lon: end[0] ?? 0,
-      lat: end[1] ?? 0,
-      snapped: segment.segment_kind === 'snapped',
-    })
+    if (segment.segment_kind === 'snapped') {
+      push(segment.coordinates[0], true)
+      push(segment.coordinates.at(-1), true)
+      continue
+    }
+    for (const position of segment.coordinates) push(position, false)
   }
 
   return waypoints
+}
+
+/**
+ * Stretches of a routed line: a section is snapped when both of its waypoints are (that is
+ * how route-snapper routes), and neighbouring sections of the same kind join into one stretch.
+ */
+export function routeLineToSegments(
+  line: Position[],
+  waypoints: { lon: number; lat: number; snapped: boolean }[],
+): RouteSegment[] {
+  const sections = splitLineAtWaypoints(
+    line,
+    waypoints.map((waypoint) => [waypoint.lon, waypoint.lat]),
+  )
+  const segments: RouteSegment[] = []
+  for (const [index, coordinates] of sections.entries()) {
+    const kind: SegmentKind =
+      waypoints[index]?.snapped && waypoints[index + 1]?.snapped ? 'snapped' : 'manual'
+    const previous = segments.at(-1)
+    if (previous?.segment_kind === kind) {
+      previous.coordinates = routeLineFromSegments([previous, { ...previous, coordinates }])
+      continue
+    }
+    if (coordinates.length < 2) continue
+    segments.push({
+      segment_index: segments.length,
+      segment_kind: kind,
+      coordinates: coordinates.map(roundPosition),
+    })
+  }
+  return segments
+}
+
+/**
+ * Stand-in drawing for a saved route whose roads are not loaded yet: straight lines between
+ * its waypoints (`ghost`), plus the waypoints themselves.
+ */
+export function waypointsPreviewGeoJson(waypoints: FlaggedWaypoint[]): FeatureCollection {
+  const line: Feature = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: waypoints.map((waypoint) => [waypoint.lon, waypoint.lat]),
+    },
+    properties: { ghost: true },
+  }
+  const points: Feature[] = waypoints.map((waypoint) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [waypoint.lon, waypoint.lat] },
+    properties: { type: waypoint.snapped ? 'snapped-waypoint' : 'free-waypoint', kind: 'mid' },
+  }))
+  return { type: 'FeatureCollection', features: waypoints.length >= 2 ? [line, ...points] : points }
 }
 
 /** GeoJSON shape expected by route-snapper map layers (`snapped` property per LineString). */
@@ -141,52 +164,4 @@ export function segmentsToRouteToolGeoJson(segments: RouteSegment[]): FeatureCol
       },
     })),
   }
-}
-
-export function buildRouteExportGeoJson(
-  segments: RouteSegment[],
-  options: RouteExportOptions = {},
-): FeatureCollection {
-  const shouldSimplify = options.simplify !== false
-
-  const collection: FeatureCollection = {
-    type: 'FeatureCollection',
-    features: segments.map((segment) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: segment.coordinates,
-      },
-      properties: {
-        segment_index: segment.segment_index,
-        segment_kind: segment.segment_kind,
-        ...(segment.osm_way_ids?.length ? { osm_way_ids: segment.osm_way_ids } : {}),
-      },
-    })),
-  }
-
-  if (!shouldSimplify) return collection
-
-  return simplify(collection, {
-    tolerance: ROUTE_EXPORT_SIMPLIFY_TOLERANCE,
-    highQuality: true,
-    // Clone: the features share their coordinate arrays with the route store.
-    mutate: false,
-  })
-}
-
-export function downloadRouteGeoJson(
-  segments: RouteSegment[],
-  options: RouteExportOptions & { filename?: string } = {},
-) {
-  const { filename = 'route.geojson', ...exportOptions } = options
-  const geojson = buildRouteExportGeoJson(segments, exportOptions)
-  const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  // Let the download start before releasing the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

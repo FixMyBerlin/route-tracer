@@ -3,25 +3,28 @@ import { useEffect, useEffectEvent, useRef } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import { init as initRouteSnapper, RouteTool } from 'route-snapper-ts'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
-import type { RouteSegment } from '@/shared/routing/route-segments'
+import { carryPinnedFlags } from '@/shared/routing/auto-snap/carry-pinned-flags'
+import { coverageContainsAll } from '@/shared/routing/coverage-contains-point'
+import type { FlaggedWaypoint } from '@/shared/routing/flagged-waypoint'
+import { useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
+import { diffSectionLengths } from '@/shared/routing/route-changes'
+import { routeSearchStateFrom } from '@/shared/routing/route-search-state'
 import {
   normalizeRouteToolGeoJson,
-  segmentsToRouteFeature,
-  segmentsToRouteToolGeoJson,
+  routeLineFromSegments,
+  waypointsPreviewGeoJson,
 } from '@/shared/routing/route-segments'
 import { useRouteSnapperGraphQuery } from '@/shared/routing/route-snapper-query'
-import { useRouteActions, useRouteSegments } from '@/shared/routing/route-store'
+import { getRouteState, useRouteActions } from '@/shared/routing/route-store'
 import {
   configureRouteToolInteractions,
+  readActiveRouteWaypoints,
+  restoreActiveRoute,
   setActiveRouteTool,
   setRouteSnapperNetwork,
   syncRouteDrawMode,
 } from '@/shared/routing/route-tool-controller'
-import {
-  usePersistRouteSegments,
-  useRouteUrlSegments,
-  useSkipInitialRoutePersist,
-} from '@/shared/routing/use-route-url-sync'
+import { usePersistRoute } from '@/shared/routing/use-route-url-sync'
 
 let routeSnapperInitPromise: Promise<void> | undefined
 
@@ -32,43 +35,28 @@ async function ensureRouteSnapperReady() {
   await routeSnapperInitPromise
 }
 
-/**
- * Load existing segments into a fresh RouteTool.
- * Prefer `editExistingRoute` so renderGeojson includes waypoint/node Point handles.
- */
-function restoreRouteOnTool(
-  routeTool: RouteTool,
-  segments: RouteSegment[] | undefined,
-  skipPersistRef: ReturnType<typeof useSkipInitialRoutePersist>,
-  setRouteToolGeoJson: (geojson: ReturnType<typeof segmentsToRouteToolGeoJson>) => void,
-  setSegments: (segments: RouteSegment[]) => void,
-) {
-  if (!segments?.length) return false
-
-  const hasManualSegments = segments.some((segment) => segment.segment_kind === 'manual')
-  if (hasManualSegments) {
-    // route-snapper editExistingRoute only restores waypoint endpoints, not dense freehand
-    // LineStrings. Declarative layers keep the shared geometry; editing may re-snap on change.
-    setRouteToolGeoJson(segmentsToRouteToolGeoJson(segments))
-    setSegments(segments)
-    routeTool.startRoute()
-    return true
-  }
-
-  const feature = segmentsToRouteFeature(segments)
-  if (!feature) return false
-
-  skipPersistRef.current = true
-  routeTool.editExistingRoute(feature)
-  return true
+function sameWaypoints(a: FlaggedWaypoint[], b: FlaggedWaypoint[]) {
+  return (
+    a.length === b.length &&
+    a.every((waypoint, index) => {
+      const other = b[index]
+      return (
+        other != null &&
+        waypoint.lon === other.lon &&
+        waypoint.lat === other.lat &&
+        waypoint.snapped === other.snapped &&
+        waypoint.pinned === other.pinned
+      )
+    })
+  )
 }
 
 /**
- * Keeps RouteTool warm once graph bytes exist and syncs URL state.
+ * Keeps RouteTool warm once graph bytes exist and keeps the store and URL in step with it.
  * Route geometry is rendered declaratively by {@link RouteToolLayers}.
  *
- * Recreate the tool only when graph bytes change — not on segment edits or MapRef churn.
- * Recreating on segment updates wiped waypoint Points (handles) from the GeoJSON source.
+ * The tool is recreated only when the graph changes (more roads loaded); the route moves over
+ * by its waypoints.
  */
 export function RouteSnapperHost() {
   const maps = useMap()
@@ -78,27 +66,66 @@ export function RouteSnapperHost() {
   const graphQuery = useRouteSnapperGraphQuery()
   const graphBytes = graphQuery.data?.graphBytes
   const routingNetworkLatest = useEffectEvent(() => graphQuery.data?.routingNetwork ?? null)
-  const urlSegments = useRouteUrlSegments()
-  const storedSegments = useRouteSegments()
-  const persistRouteSegments = usePersistRouteSegments()
-  const skipPersistRef = useSkipInitialRoutePersist()
-  const { setRouteToolGeoJson, setSegments, setSnapMode, setUndoLength } = useRouteActions()
+  const coverage = useOsmCoverageQuery({ select: (data) => data.coverage })
+  const coverageLatest = useEffectEvent(() => coverage.data)
+  const persistRoute = usePersistRoute()
+  const actions = useRouteActions()
+  const { setRouteToolGeoJson, setSnapMode, setUndoLength } = actions
   const routeToolRef = useRef<RouteTool | null>(null)
-
-  const segmentsToRestoreLatest = useEffectEvent(() => {
-    return storedSegments.length > 0 ? storedSegments : urlSegments
-  })
+  /** The next render is the first one of a route just loaded into the tool. */
+  const justRestoredRef = useRef(false)
+  /**
+   * The waypoints last taken over from the tool. Compared against this rather than the store,
+   * because undo and re-snap seed the store's flags before the tool redraws.
+   */
+  const syncedWaypointsRef = useRef<FlaggedWaypoint[]>([])
 
   const onRouteToolGeoJson = useEffectEvent((geojson: FeatureCollection) => {
     setRouteToolGeoJson(geojson)
-
     const segments = normalizeRouteToolGeoJson(geojson)
-    setSegments(segments)
-    if (skipPersistRef.current) {
-      skipPersistRef.current = false
-    } else {
-      persistRouteSegments(segments)
+    actions.setSegments(segments)
+
+    const live = readActiveRouteWaypoints()
+    if (!live) return
+    const state = getRouteState()
+    const justRestored = justRestoredRef.current
+    justRestoredRef.current = false
+
+    // Right after loading, the tool hands back the same points, moved onto its graph nodes;
+    // keep their flags by position in the list rather than by distance.
+    const waypoints =
+      justRestored && live.length === state.waypoints.length
+        ? live.map((waypoint, index) => ({
+            ...waypoint,
+            pinned: state.waypoints[index]?.pinned ?? true,
+          }))
+        : carryPinnedFlags(state.waypoints, live, 1)
+    if (!justRestored && sameWaypoints(waypoints, syncedWaypointsRef.current)) return
+
+    syncedWaypointsRef.current = waypoints
+    actions.setWaypoints(waypoints)
+    actions.setRouteLine(routeLineFromSegments(segments))
+    const route = routeSearchStateFrom(waypoints, segments)
+    const { sectionLengths } = route
+
+    if (justRestored) {
+      // Compared once, on the first load from the link. A later reload (more roads loaded)
+      // keeps whatever is still waiting for the user.
+      const saved = state.savedSectionLengths
+      const changes =
+        saved && sectionLengths ? diffSectionLengths(saved, sectionLengths) : state.routeChanges
+      if (saved) {
+        actions.setSavedSectionLengths(null)
+        actions.setRouteChanges(changes)
+      }
+      // Leave the link as it was saved until the user has looked at what changed.
+      if (changes.length > 0) return
+    } else if (state.routeChanges.length > 0) {
+      // Editing the route is the user taking over from the saved version.
+      actions.setRouteChanges([])
     }
+
+    persistRoute(route)
   })
 
   useEffect(
@@ -124,16 +151,18 @@ export function RouteSnapperHost() {
         setRouteSnapperNetwork(routingNetworkLatest())
         setActiveRouteTool(routeTool)
 
-        if (
-          !restoreRouteOnTool(
-            routeTool,
-            segmentsToRestoreLatest(),
-            skipPersistRef,
-            setRouteToolGeoJson,
-            setSegments,
-          )
-        ) {
+        const { waypoints } = getRouteState()
+        if (waypoints.length === 0) {
           routeTool.startRoute()
+        } else if (coverageContainsAll(coverageLatest(), waypoints)) {
+          // route-snapper snaps a waypoint to the nearest road it knows, however far away, so a
+          // saved route only goes in once the roads under all of its waypoints are loaded.
+          justRestoredRef.current = true
+          restoreActiveRoute(waypoints)
+        } else {
+          // Not started: nothing is drawn or saved until the roads along the route are loaded.
+          // RoadsAlongLinePrompt offers loading them.
+          setRouteToolGeoJson(waypointsPreviewGeoJson(waypoints))
         }
         syncRouteDrawMode()
       })
@@ -147,15 +176,7 @@ export function RouteSnapperHost() {
       }
     },
     // Recreate only when the MapLibre instance or graph bytes change.
-    [
-      graphBytes,
-      mapLibre,
-      setRouteToolGeoJson,
-      setSegments,
-      setSnapMode,
-      setUndoLength,
-      skipPersistRef,
-    ],
+    [actions, graphBytes, mapLibre, setRouteToolGeoJson, setSnapMode, setUndoLength],
   )
 
   return null

@@ -1,5 +1,6 @@
 import { ExportPanel } from '@/components/ExportPanel'
 import { ReferenceImagePanel } from '@/components/ReferenceImagePanel'
+import { RouteChangesNotice } from '@/components/RouteChangesNotice'
 import { RoutePanel } from '@/components/RoutePanel'
 import { RoutingStatusPanel } from '@/components/RoutingStatusPanel'
 import { Route } from '@/routes/index'
@@ -34,7 +35,7 @@ const stepCopy: Record<WorkflowStep, { title: string; description: React.ReactNo
   export: {
     title: 'Export the route',
     description:
-      'Download a GeoJSON FeatureCollection with one LineString per segment. Route geometry, overlay alignment, and image source are encoded in the URL.',
+      'Download a GeoJSON FeatureCollection with one LineString per segment. The link keeps the route’s points, so it can be opened and routed again later.',
   },
 }
 
@@ -54,6 +55,7 @@ export function Sidebar({ onImageFile, zoom }: SidebarProps) {
         {step === 'tracing' ? (
           <>
             <RoutingStatusPanel zoom={zoom} />
+            <RouteChangesNotice />
             <RoutePanel />
           </>
         ) : null}

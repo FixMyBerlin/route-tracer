@@ -31,7 +31,7 @@ function describeLoadError(error: unknown) {
 }
 
 /**
- * Manual viewport load. `error` holds the message of the last failed load, shared by every
+ * Manual load of one box (a viewport or a piece along a line). `error` holds the message of the last failed load, shared by every
  * place that offers loading.
  */
 export function useOsmCoverageFetch() {
@@ -44,7 +44,7 @@ export function useOsmCoverageFetch() {
     args: CoverageFetchArgs,
     options?: { force?: boolean; clearPersistedOnForce?: boolean },
   ) {
-    if (args.zoom < viewMinZoom) return
+    if (args.zoom < viewMinZoom) return false
 
     setOsmLoadError(null)
     try {
@@ -53,9 +53,11 @@ export function useOsmCoverageFetch() {
         force: options?.force === true,
         clearPersistedOnForce: options?.clearPersistedOnForce === true,
       })
+      return true
     } catch (error: unknown) {
       console.error(error)
       setOsmLoadError(describeLoadError(error))
+      return false
     }
   }
 

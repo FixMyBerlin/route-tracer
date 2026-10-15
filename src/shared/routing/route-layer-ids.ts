@@ -2,5 +2,8 @@ export const ROUTE_TOOL_SOURCE_ID = 'route-tracer-route-tool'
 
 export const ROUTE_SNAPPED_LAYER_ID = 'route-tracer-snapped'
 export const ROUTE_MANUAL_LAYER_ID = 'route-tracer-manual'
+export const ROUTE_GHOST_LAYER_ID = 'route-tracer-ghost'
 export const ROUTE_WAYPOINT_LAYER_ID = 'route-tracer-waypoints'
 export const ROUTE_WAYPOINT_LABEL_LAYER_ID = 'route-tracer-waypoint-labels'
+export const REVIEW_SOURCE_ID = 'route-tracer-review'
+export const REVIEW_LAYER_ID = 'route-tracer-review-highlight'
