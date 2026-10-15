@@ -2,10 +2,6 @@ import { GeocodingControl, type BBox, type Feature } from '@maptiler/geocoding-c
 import { useControl } from 'react-map-gl/maplibre'
 import { MAPTILER_GEOCODING_API_KEY } from '@/shared/map/maptiler-geocoding-api-key'
 
-// React StrictMode can leave duplicate geocoder DOM until upstream fixes onRemove cleanup:
-// https://github.com/maptiler/maptiler-geocoding-control/issues/115
-// Patched via patches/@maptiler%2Fgeocoding-control@3.0.0.patch (FixMyBerlin/tilda-geo@2140279).
-
 /** OSM Germany envelope `[west, south, east, north]`. */
 const germanyBbox: BBox = [5.8663, 47.2701, 15.0419, 55.0992]
 

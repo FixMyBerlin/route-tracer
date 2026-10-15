@@ -1,0 +1,26 @@
+diff --git a/dist/maplibregl.js b/dist/maplibregl.js
+index f5ce0249c607bcc6e3f5e1e0f85fe7408574b59d..148968c41a87d9d155920c2cef8d52fb7de57fbb 100644
+--- a/dist/maplibregl.js
++++ b/dist/maplibregl.js
+@@ -7,7 +7,7 @@ import "@turf/clone";
+ import { styleMap as Xe } from "lit/directives/style-map.js";
+ import { featureCollection as Z, polygon as et, feature as tt } from "@turf/helpers";
+ import Fe from "@turf/union";
+-import te from "maplibre-gl";
++import * as te from "maplibre-gl";
+ import $e from "@turf/bbox";
+ import it from "@turf/difference";
+ import st from "@turf/flatten";
+diff --git a/dist/maptilersdk.js b/dist/maptilersdk.js
+index 18ac6fa0ce8325fb5793df9e8d81e2517afe7ab4..39b47cab76ff61625ffea6d76952f2a2e050e9f4 100644
+--- a/dist/maptilersdk.js
++++ b/dist/maptilersdk.js
+@@ -8,7 +8,7 @@ import { styleMap as Xe } from "lit/directives/style-map.js";
+ import { config as et } from "@maptiler/sdk";
+ import { featureCollection as Z, polygon as tt, feature as it } from "@turf/helpers";
+ import Oe from "@turf/union";
+-import te from "maplibre-gl";
++import * as te from "maplibre-gl";
+ import $e from "@turf/bbox";
+ import st from "@turf/difference";
+ import rt from "@turf/flatten";
