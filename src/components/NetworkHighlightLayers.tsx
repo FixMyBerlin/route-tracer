@@ -1,7 +1,7 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
 import { Route } from '@/routes/index'
+import { useBelowRouteLayer } from '@/shared/map/use-below-route-layer'
 import { NETWORK_HIGHLIGHT_COLORS } from '@/shared/routing/constants'
-import { ROUTE_SNAPPED_LAYER_ID } from '@/shared/routing/route-layer-ids'
 import {
   useOverpassWaysGeoJson,
   useRouteSnapperGraphQuery,
@@ -27,9 +27,10 @@ const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
  * Routing graph: purple hairline plus subtle dots at snappable nodes
  * (fixed pixel size, independent of road class).
  *
- * Inserted below the drawn route (`ROUTE_SNAPPED_LAYER_ID`). Positron is untouched.
+ * Inserted below the drawn route. Positron is untouched.
  */
 export function NetworkHighlightLayers() {
+  const belowRoute = useBelowRouteLayer()
   const mode = Route.useSearch({ select: (search) => search.network })
   const graph = useRouteSnapperGraphQuery()
   const snappableNodes = useSnappableNodesQuery()
@@ -48,7 +49,7 @@ export function NetworkHighlightLayers() {
         id={OVERPASS_HIGHLIGHT_LAYER_ID}
         type="line"
         source={OVERPASS_HIGHLIGHT_SOURCE_ID}
-        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        beforeId={belowRoute}
         layout={{
           visibility: mode === 'overpass' ? 'visible' : 'none',
           'line-cap': 'round',
@@ -64,7 +65,7 @@ export function NetworkHighlightLayers() {
         id={ROUTING_HIGHLIGHT_LAYER_ID}
         type="line"
         source={ROUTING_HIGHLIGHT_SOURCE_ID}
-        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        beforeId={belowRoute}
         layout={{
           visibility: mode === 'routing' ? 'visible' : 'none',
           'line-cap': 'round',
@@ -80,7 +81,7 @@ export function NetworkHighlightLayers() {
         id={ROUTING_HIGHLIGHT_NODES_LAYER_ID}
         type="circle"
         source={ROUTING_HIGHLIGHT_NODES_SOURCE_ID}
-        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        beforeId={belowRoute}
         layout={{
           visibility: mode === 'routing' ? 'visible' : 'none',
         }}

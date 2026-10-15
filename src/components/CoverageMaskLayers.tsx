@@ -1,7 +1,7 @@
 import { Layer, Source } from 'react-map-gl/maplibre'
+import { useBelowRouteLayer } from '@/shared/map/use-below-route-layer'
 import { coverageUnloadedMask } from '@/shared/routing/coverage-mask'
 import { useOsmCoverageQuery } from '@/shared/routing/osm-coverage-query'
-import { ROUTE_SNAPPED_LAYER_ID } from '@/shared/routing/route-layer-ids'
 
 const COVERAGE_MASK_SOURCE_ID = 'osm-coverage-mask'
 const COVERAGE_MASK_FILL_LAYER_ID = 'osm-coverage-mask-fill'
@@ -12,6 +12,7 @@ const COVERAGE_MASK_LINE_LAYER_ID = 'osm-coverage-mask-line'
  * Hidden until the first coverage polygon is in the store.
  */
 export function CoverageMaskLayers() {
+  const belowRoute = useBelowRouteLayer()
   const coverage = useOsmCoverageQuery({
     select: (data) => data.coverage,
   })
@@ -28,7 +29,7 @@ export function CoverageMaskLayers() {
         id={COVERAGE_MASK_FILL_LAYER_ID}
         type="fill"
         source={COVERAGE_MASK_SOURCE_ID}
-        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        beforeId={belowRoute}
         paint={{
           'fill-color': '#0f172a',
           'fill-opacity': 0.4,
@@ -38,7 +39,7 @@ export function CoverageMaskLayers() {
         id={COVERAGE_MASK_LINE_LAYER_ID}
         type="line"
         source={COVERAGE_MASK_SOURCE_ID}
-        beforeId={ROUTE_SNAPPED_LAYER_ID}
+        beforeId={belowRoute}
         paint={{
           'line-color': '#1e293b',
           'line-width': 1,
