@@ -5,8 +5,8 @@ import dotenv from 'dotenv'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-dotenv.config({ path: path.resolve(__dirname, '.env') })
-dotenv.config({ path: path.resolve(__dirname, '.env.test') })
+dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true })
+dotenv.config({ path: path.resolve(__dirname, '.env.test'), quiet: true })
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5210'
 
