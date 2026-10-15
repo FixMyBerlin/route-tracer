@@ -67,6 +67,7 @@
     "bun-types": "^1.4.3",
     "dotenv": "^18.0.7",
     "eslint-plugin-compat": "^7.0.2",
+    "happy-dom": "^20.14.6",
     "husky": "^9.1.7",
     "knip": "^6.41.0",
     "oxc-transform-react": "^0.145.0",

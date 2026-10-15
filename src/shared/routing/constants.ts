@@ -13,7 +13,8 @@ export const ROUTE_SEGMENT_COLORS = {
   freehand: '#0f172a',
 } as const
 
-/** Places on the route to check. */
+/** The uploaded GPS track and the places to check on the route. */
+export const TRACK_LINE_COLOR = '#db2777'
 export const REVIEW_HIGHLIGHT_COLOR = '#f59e0b'
 
 export const ROUTE_LINE_WIDTH_PX = 5

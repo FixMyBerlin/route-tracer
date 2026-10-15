@@ -1,12 +1,8 @@
 import { twJoin } from 'tailwind-merge'
 import { AppLogo } from '@/components/AppLogo'
-import { Route } from '@/routes/index'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
-import {
-  workflowStepLabels,
-  workflowSteps,
-  type WorkflowStep,
-} from '@/shared/routing/workflow-steps'
+import { useWorkflow } from '@/shared/routing/use-workflow'
+import { firstStepOf, workflowStepLabel, type WorkflowStep } from '@/shared/routing/workflow-steps'
 
 function BreadcrumbChevron() {
   return (
@@ -23,7 +19,7 @@ function BreadcrumbChevron() {
 }
 
 export function WorkflowNav() {
-  const step = Route.useSearch({ select: (search) => search.step })
+  const { mode, step, steps } = useWorkflow()
   const { updateSearch } = useIndexSearchNavigation()
 
   const goToStep = (next: WorkflowStep) => {
@@ -40,7 +36,7 @@ export function WorkflowNav() {
           <div className="flex items-center">
             <button
               type="button"
-              onClick={() => goToStep('image')}
+              onClick={() => goToStep(firstStepOf(mode))}
               className="text-slate-400 hover:text-slate-300"
             >
               <AppLogo className="size-5" />
@@ -48,7 +44,7 @@ export function WorkflowNav() {
             </button>
           </div>
         </li>
-        {workflowSteps.map((pageStep) => {
+        {steps.map((pageStep) => {
           const current = pageStep === step
           return (
             <li key={pageStep} className="flex">
@@ -65,7 +61,7 @@ export function WorkflowNav() {
                       : 'border-transparent text-slate-400 hover:text-slate-200',
                   )}
                 >
-                  {workflowStepLabels[pageStep]}
+                  {workflowStepLabel(pageStep, mode)}
                 </button>
               </div>
             </li>

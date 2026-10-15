@@ -7,6 +7,7 @@ export const Route = createFileRoute('/')({
   search: {
     middlewares: [
       stripSearchParams({
+        mode: indexSearchDefaults.mode,
         network: indexSearchDefaults.network,
       }),
     ],

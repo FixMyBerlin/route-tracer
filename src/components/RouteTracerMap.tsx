@@ -13,29 +13,41 @@ import { ReviewHighlightLayers } from '@/components/ReviewHighlightLayers'
 import { RouteSnapperHost } from '@/components/RouteSnapperHost'
 import { RouteToolLayers } from '@/components/RouteToolLayers'
 import { SavedRouteRoadsPrompt } from '@/components/SavedRouteRoadsPrompt'
+import { TrackLayers } from '@/components/TrackLayers'
 import { ViewMinZoomOverlay } from '@/components/ViewMinZoomOverlay'
 import { exposeMainMapForDebugging } from '@/shared/map/expose-main-map'
 import { useMapChromeActions } from '@/shared/map/map-chrome-store'
 import { MAIN_MAP_ID } from '@/shared/map/map-ids'
+import type { SourceMode } from '@/shared/routing/search-schema'
 import { useIndexSearchNavigation } from '@/shared/routing/use-index-search-navigation'
 import { useRestoreOsmCoverage } from '@/shared/routing/use-restore-osm-coverage'
 import { useRouteChangeItems } from '@/shared/routing/use-route-change-items'
 import { useSavedRouteNeedsRoads } from '@/shared/routing/use-saved-route-needs-roads'
 import type { WorkflowStep } from '@/shared/routing/workflow-steps'
+import { useTrackReview } from '@/shared/track-source/use-track-review'
 
 type RouteTracerMapProps = {
   mapViewport: MapParam
   zoom: number
   step: WorkflowStep
+  mode: SourceMode
   onZoomChange: (zoom: number) => void
 }
 
-export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteTracerMapProps) {
+export function RouteTracerMap({
+  mapViewport,
+  zoom,
+  step,
+  mode,
+  onZoomChange,
+}: RouteTracerMapProps) {
   const { updateSearch } = useIndexSearchNavigation()
   const tracing = step === 'tracing'
   const imageEditable = step === 'image'
   const savedRouteNeedsRoads = useSavedRouteNeedsRoads()
   const routeChangeItems = useRouteChangeItems()
+  const trackReview = useTrackReview()
+  const reviewItems = [...routeChangeItems, ...(mode === 'track' ? trackReview.open : [])]
   useRestoreOsmCoverage()
   const { markMapLoaded, bumpViewEpoch } = useMapChromeActions()
   const { mapHandlers: referenceImageHandlers, layers: referenceImageLayers } =
@@ -84,7 +96,8 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
         <AttributionControl compact position="bottom-right" />
         <MapGeocodingControl />
         <RouteToolLayers />
-        {tracing ? <ReviewHighlightLayers items={routeChangeItems} /> : null}
+        {mode === 'track' ? <TrackLayers /> : null}
+        {tracing ? <ReviewHighlightLayers items={reviewItems} /> : null}
         {tracing ? <CoverageMaskLayers /> : null}
         {tracing ? <NetworkHighlightLayers /> : null}
         {referenceImageLayers}
