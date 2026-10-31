@@ -14,6 +14,7 @@ const osmCoverageApi = createOsmCoverageApi({
   download: downloadOsmXmlCoverage,
   isNetworkEnabled: () => true,
   storage: createOsmCoverageIdbStorage(),
+  onPersistError: (error) => console.error(error),
 })
 
 export const restoreOsmCoverageSession = osmCoverageApi.restoreSession

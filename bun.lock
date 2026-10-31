@@ -6,12 +6,12 @@
       "name": "route-tracer",
       "dependencies": {
         "@maptiler/geocoding-control": "^3.1.0",
-        "@osm-editor-kit/osm-coverage": "0.1.0-alpha.2",
-        "@osm-editor-kit/osm-data": "0.1.0-alpha.0",
-        "@osm-editor-kit/osm-map-url": "0.1.0-alpha.0",
-        "@osm-editor-kit/osm-maplibre": "0.1.0-alpha.0",
-        "@osm-editor-kit/osm-route-snapper": "0.1.0-alpha.0",
-        "@osm-editor-kit/osm-way-chain": "0.1.0-alpha.2",
+        "@osm-editor-kit/osm-coverage": "1.0.0",
+        "@osm-editor-kit/osm-data": "1.0.0",
+        "@osm-editor-kit/osm-map-url": "1.0.0",
+        "@osm-editor-kit/osm-maplibre": "1.0.0",
+        "@osm-editor-kit/osm-route-snapper": "1.0.0",
+        "@osm-editor-kit/osm-way-chain": "1.0.0",
         "@tanstack/react-hotkeys": "^0.13.0",
         "@tanstack/react-pacer": "^0.24.1",
         "@tanstack/react-query": "^5.104.1",
@@ -71,7 +71,7 @@
     "@maptiler/geocoding-control@3.1.0": "patches/@maptiler%2Fgeocoding-control@3.1.0.patch",
   },
   "overrides": {
-    "@osm-editor-kit/osm-data": "0.1.0-alpha.0",
+    "@osm-editor-kit/osm-data": "1.0.0",
     "maplibre-gl": "^6.13.0",
   },
   "packages": {
@@ -175,17 +175,17 @@
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.2", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.3", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.3" } }, "sha512-JfB4kuJQjaoHuCTseIINHtHWeJnvgEcxjwA5t/Y00ZgaOO1Crz3fjT/p8kT28zA/Caz7oiUMn3d6H2yOVCVwuw=="],
 
-    "@osm-editor-kit/osm-coverage": ["@osm-editor-kit/osm-coverage@0.1.0-alpha.2", "", { "dependencies": { "@osm-editor-kit/osm-data": "workspace:*", "@tanstack/react-query": "^5.85.5", "@turf/area": "^7.3.5", "@turf/bbox": "^7.3.5", "@turf/bbox-polygon": "^7.3.5", "@turf/difference": "^7.3.5", "@turf/flatten": "^7.3.5", "@turf/helpers": "^7.3.5", "@turf/intersect": "^7.3.5", "@turf/union": "^7.3.5" }, "peerDependencies": { "react": "^19.0.0" } }, "sha512-WLWkIySrRDSHaTt22Ea8jyq8KZXBug4mkYrpuYGEHKXPPwOXW/5RaHfSGQVbo+pEo6czp170B2AqL6exceuBgw=="],
+    "@osm-editor-kit/osm-coverage": ["@osm-editor-kit/osm-coverage@1.0.0", "", { "dependencies": { "@osm-editor-kit/osm-data": "^1.0.0", "@turf/area": "^7.3.5", "@turf/bbox": "^7.3.5", "@turf/bbox-polygon": "^7.3.5", "@turf/difference": "^7.3.5", "@turf/flatten": "^7.3.5", "@turf/helpers": "^7.3.5", "@turf/intersect": "^7.3.5", "@turf/union": "^7.3.5", "@types/geojson": "^7946.0.16" }, "peerDependencies": { "@tanstack/react-query": "^5", "react": "^19.0.0" } }, "sha512-I99/fGGuv58C+NTG5A7MODA6gkK+en3pHZF/ANEOf+oATM1NvMvBlM0h7z5SMopXEyDXfleMZwbL7cEd/O2J7w=="],
 
-    "@osm-editor-kit/osm-data": ["@osm-editor-kit/osm-data@0.1.0-alpha.0", "", { "dependencies": { "axios": "^1.11.0" } }, "sha512-sD75UnNoEW8vU0IHDRvO6ggK18jhO14iZ3nrVCDgXb5KGNFo4PlLT15yNfuB6s61eLdErFBmtaODRA6r8uQy3w=="],
+    "@osm-editor-kit/osm-data": ["@osm-editor-kit/osm-data@1.0.0", "", { "dependencies": { "axios": "^1.11.0" } }, "sha512-9eiDFkVh15d7UeqMIBcE1v/EKRn7HaZ6uZ+Z0UglaE6mqohfYn50KbCZJ8J3BR6OjT9doygKBlIRqt8/cUuQFg=="],
 
-    "@osm-editor-kit/osm-map-url": ["@osm-editor-kit/osm-map-url@0.1.0-alpha.0", "", { "dependencies": { "zod": "^4.0.17" }, "peerDependencies": { "@tanstack/react-router": "^1.131.28" } }, "sha512-j17kYI65lor3pstL7kDqFpCqilKuBixCpy+ubAWKIBHyVxzNRwOZgmcyqIUq8VcWT6thKffVbOpYArPhFQV8sw=="],
+    "@osm-editor-kit/osm-map-url": ["@osm-editor-kit/osm-map-url@1.0.0", "", { "dependencies": { "zod": "^4.0.17" }, "peerDependencies": { "@tanstack/react-router": "^1.131.28" } }, "sha512-Lzp03GsQ2SaNQfYUzU+UWUotQzLzjLMBbEDanhoBfHzqUk95cb9ik3WNQfTjQmc2iCR7ROKr/gh3XgWasjqy5w=="],
 
-    "@osm-editor-kit/osm-maplibre": ["@osm-editor-kit/osm-maplibre@0.1.0-alpha.0", "", { "dependencies": { "maplibre-gl": "^5.7.1" } }, "sha512-ktTxgKOoirz0nFfaKruvhW0zudORE1u2aTewCyGhw6vi79NIzP3vxc5Zw6Zg+jIxW2BtQrhGRDwgAQBJpLCbNw=="],
+    "@osm-editor-kit/osm-maplibre": ["@osm-editor-kit/osm-maplibre@1.0.0", "", { "peerDependencies": { "maplibre-gl": "^6" } }, "sha512-Ewkd6bj8pOpKWXBdITfcVEWcsRcyzcU5jmfznF7Cef5CSXicdQd11/DjNQFCOIzOMNPNLX5U8DZjcaVsbWHm5A=="],
 
-    "@osm-editor-kit/osm-route-snapper": ["@osm-editor-kit/osm-route-snapper@0.1.0-alpha.0", "", { "dependencies": { "@osm-editor-kit/osm-data": "workspace:*" }, "peerDependencies": { "@tanstack/react-query": "^5.85.5", "react": "^19.0.0", "route-snapper": "^0.4.9" } }, "sha512-56yVaTPjRx3yjEoFkg54jhUHuLgAF6nLuj/lbosUTiJ1DNAbw2xRP0gGqU5vEUyxbj+DuwUOdzjA5wBlGx9D3A=="],
+    "@osm-editor-kit/osm-route-snapper": ["@osm-editor-kit/osm-route-snapper@1.0.0", "", { "dependencies": { "@osm-editor-kit/osm-data": "^1.0.0", "@types/geojson": "^7946.0.16" }, "peerDependencies": { "@tanstack/react-query": "^5.85.5", "react": "^19.0.0", "route-snapper": "^0.4.9" } }, "sha512-pt1DPcUPA55sRJUCijGh92GGZ6hra4nP27qzP7lFQCZKYQYH9sEQea+FphlKou8skjsDIEvy22lQ08/dzZsx5A=="],
 
-    "@osm-editor-kit/osm-way-chain": ["@osm-editor-kit/osm-way-chain@0.1.0-alpha.2", "", { "dependencies": { "@osm-editor-kit/osm-data": "workspace:*" } }, "sha512-EkoJlgM6xjl9haA0VJOVU8gg8W5Z90jy1aawiFXAQOsepUTxOq/jUYSwSPfwZxxL53elzibWSg9E39ZEQx17RA=="],
+    "@osm-editor-kit/osm-way-chain": ["@osm-editor-kit/osm-way-chain@1.0.0", "", { "dependencies": { "@osm-editor-kit/osm-data": "^1.0.0", "@types/geojson": "^7946.0.16" } }, "sha512-yqi+Jk3hQenKRy5kzZvD7sUTUBlOvp1zYWtbfhcWts6v3TFOPvoXBlbf+PghWdS6WoQNRu+SLOOp4J+1O7wHrg=="],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.153.0", "", { "os": "android", "cpu": "arm" }, "sha512-BcWu25dMwMjHpaDCEidmpAi7rGg1qZoihJeUUH9bD55pVZ0z4Wa5CQgqSTo0R41H81oozisQKW3WqvAN2m77IQ=="],
 
