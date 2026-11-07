@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent } from 'react'
 import { Route } from '@/routes/index'
 import { loadTrackText } from '@/shared/track-source/loaded-track'
-import { getTrack, pruneExpiredTracks } from '@/shared/track-source/track-idb'
+import { acceptedReviewIdsOf, getTrack, pruneExpiredTracks } from '@/shared/track-source/track-idb'
 import { useTrack, useTrackActions } from '@/shared/track-source/track-store'
 
 /**
@@ -31,7 +31,7 @@ export function useRestoreTrack() {
         await pruneExpiredTracks()
         const record = await getTrack(id)
         if (ignore || !record) return false
-        setTrack(loadTrackText(record.id, record.fileName, record.text))
+        setTrack(loadTrackText(record.id, record.fileName, record.text), acceptedReviewIdsOf(record))
         return true
       }
 

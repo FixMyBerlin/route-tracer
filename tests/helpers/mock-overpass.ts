@@ -4,24 +4,31 @@ import type { Page } from '@playwright/test'
  * Answer Overpass requests with a small made-up street grid, so tests never put load on the
  * community server. Returns a counter of the requests the app made.
  */
-export async function mockOverpass(page: Page, center: { lat: number; lng: number }) {
+export async function mockOverpass(
+  page: Page,
+  center: { lat: number; lng: number },
+  options: { gridSize?: number } = {},
+) {
   const requests = { count: 0 }
+  const body = streetGridXml(center, options.gridSize ?? DEFAULT_GRID_SIZE)
   await page.route('**/interpreter?data=*', async (route) => {
     requests.count += 1
     await route.fulfill({
       status: 200,
       contentType: 'application/osm3s+xml',
       headers: { 'access-control-allow-origin': '*' },
-      body: streetGridXml(center),
+      body,
     })
   })
   return requests
 }
 
-const GRID_SIZE = 5
+const DEFAULT_GRID_SIZE = 5
 const GRID_STEP_DEGREES = 0.001
 
-function streetGridXml(center: { lat: number; lng: number }) {
+/** Streets every {@link GRID_STEP_DEGREES} around the centre, `gridSize` of them each way. */
+function streetGridXml(center: { lat: number; lng: number }, gridSize: number) {
+  const GRID_SIZE = gridSize
   const nodeId = (row: number, column: number) => 1000 + row * GRID_SIZE + column
   const half = (GRID_SIZE - 1) / 2
   const nodes: string[] = []

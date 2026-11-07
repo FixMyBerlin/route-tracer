@@ -8,14 +8,15 @@ type TrackStore = {
   restoreStatus: TrackRestoreStatus
   /** Message for the last file that could not be read. */
   error: string | null
-  /** Review items the user marked as fine, by id. Session only. */
+  /** Review items the user marked as fine, by id. Also stored with the track in IndexedDB. */
   acceptedReviewIds: string[]
   actions: {
-    setTrack: (track: LoadedTrack) => void
+    setTrack: (track: LoadedTrack, acceptedReviewIds?: string[]) => void
     clearTrack: () => void
     setRestoreStatus: (status: TrackRestoreStatus) => void
     setError: (error: string | null) => void
     acceptReview: (id: string) => void
+    setAcceptedReviewIds: (ids: string[]) => void
   }
 }
 
@@ -25,7 +26,8 @@ const useTrackStore = create<TrackStore>((set) => ({
   error: null,
   acceptedReviewIds: [],
   actions: {
-    setTrack: (track) => set({ track, restoreStatus: 'ready', error: null, acceptedReviewIds: [] }),
+    setTrack: (track, acceptedReviewIds = []) =>
+      set({ track, restoreStatus: 'ready', error: null, acceptedReviewIds }),
     clearTrack: () =>
       set({ track: null, restoreStatus: 'idle', error: null, acceptedReviewIds: [] }),
     setRestoreStatus: (restoreStatus) => set({ restoreStatus }),
@@ -36,6 +38,7 @@ const useTrackStore = create<TrackStore>((set) => ({
           ? state
           : { acceptedReviewIds: [...state.acceptedReviewIds, id] },
       ),
+    setAcceptedReviewIds: (acceptedReviewIds) => set({ acceptedReviewIds }),
   },
 }))
 
@@ -44,3 +47,8 @@ export const useTrackRestoreStatus = () => useTrackStore((state) => state.restor
 export const useTrackError = () => useTrackStore((state) => state.error)
 export const useAcceptedReviewIds = () => useTrackStore((state) => state.acceptedReviewIds)
 export const useTrackActions = () => useTrackStore((state) => state.actions)
+
+/** Read outside React (the review actions save the marks with the stored track). */
+export function getTrackState() {
+  return useTrackStore.getState()
+}

@@ -1,5 +1,5 @@
 import { useHotkey } from '@tanstack/react-hotkeys'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import { ReviewItemList } from '@/components/ReviewItemList'
 import { fitMapToLine } from '@/shared/map/fit-map-to-line'
@@ -7,9 +7,13 @@ import { useRoutingReadiness } from '@/shared/routing/route-snapper-query'
 import { useRouteWaypoints } from '@/shared/routing/route-store'
 import { useLoadRoadsAlongLine } from '@/shared/routing/use-load-roads-along-line'
 import type { LoadedTrack } from '@/shared/track-source/loaded-track'
-import { useTrack, useTrackActions } from '@/shared/track-source/track-store'
+import { useTrack } from '@/shared/track-source/track-store'
 import { useSnapTrack } from '@/shared/track-source/use-snap-track'
-import { useTrackReview } from '@/shared/track-source/use-track-review'
+import {
+  dropStaleReviewChecks,
+  useCheckReviewItem,
+  useTrackReview,
+} from '@/shared/track-source/use-track-review'
 
 const emptyLine: LoadedTrack['line'] = []
 
@@ -19,8 +23,9 @@ const kbdClass =
 /** What auto-snap may have got wrong, as a checklist. N jumps to the next open place. */
 export function TrackReviewPanel() {
   const track = useTrack()
-  const { open, acceptedCount } = useTrackReview()
-  const { acceptReview } = useTrackActions()
+  const { open, total, checked, stale } = useTrackReview()
+  const [saveFailed, setSaveFailed] = useState(false)
+  const checkItem = useCheckReviewItem(() => setSaveFailed(true))
   const { mainMap } = useMap()
   const [cursor, setCursor] = useState(0)
   const { snapTrack, snapping, error: snapError, ready } = useSnapTrack()
@@ -28,6 +33,13 @@ export function TrackReviewPanel() {
   const { graphBuilding } = useRoutingReadiness()
   const waypoints = useRouteWaypoints()
   const pinnedCount = waypoints.filter((waypoint) => waypoint.pinned).length
+
+  useEffect(
+    function dropStaleChecks() {
+      if (stale.length > 0) dropStaleReviewChecks(stale)
+    },
+    [stale],
+  )
 
   const showNext = () => {
     if (open.length === 0) return
@@ -51,6 +63,35 @@ export function TrackReviewPanel() {
         ) : null}
       </div>
 
+      {total > 0 ? (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>
+              {checked} of {total} checked
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Places checked"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={checked}
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800"
+          >
+            <div
+              className="h-full rounded-full bg-sky-500 transition-[width]"
+              style={{ width: `${(checked / total) * 100}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {saveFailed ? (
+        <p className="mt-2 text-sm leading-tight text-amber-400" role="status">
+          Your checks could not be saved in this browser. They last until you reload.
+        </p>
+      ) : null}
+
       {waypoints.length < 2 ? (
         <p className="mt-2 text-sm leading-tight text-slate-400">
           There is no route to check yet. Snap the track to the roads, or draw the route yourself.
@@ -58,7 +99,7 @@ export function TrackReviewPanel() {
       ) : open.length === 0 ? (
         <p className="mt-2 text-sm leading-tight text-slate-400">
           The route follows your track everywhere
-          {acceptedCount > 0 ? `, apart from ${acceptedCount} you marked as right` : ''}.
+          {checked > 0 ? `, apart from ${checked} you marked as right` : ''}.
         </p>
       ) : (
         <>
@@ -70,7 +111,7 @@ export function TrackReviewPanel() {
             </kbd>{' '}
             for the next one.
           </p>
-          <ReviewItemList items={open} onAccept={(item) => acceptReview(item.id)} />
+          <ReviewItemList items={open} onAccept={(item) => checkItem(item.id)} />
         </>
       )}
 
