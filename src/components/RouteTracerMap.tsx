@@ -50,8 +50,6 @@ export function RouteTracerMap({ mapViewport, zoom, step, onZoomChange }: RouteT
         doubleClickZoom={false}
         style={{ width: '100%', height: '100%' }}
         attributionControl={false}
-        // Omitting this loads the RTL text plugin from a third-party CDN.
-        RTLTextPlugin={false}
         cursor={referenceImageHandlers.cursor}
         interactiveLayerIds={referenceImageHandlers.interactiveLayerIds}
         onLoad={(event: MapLibreEvent) => {
